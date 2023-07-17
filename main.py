@@ -10,7 +10,6 @@ from retrying import retry
 from openpyxl import Workbook, load_workbook
 
 req_session = requests.session()
-# parser = etree.HTMLParser()
 headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,'
               'application/signed-exchange;v=b3;q=0.7',
@@ -31,44 +30,41 @@ headers = {
 req_session.headers = headers
 title = "柳州"
 host = "https://www.gxghj.cn"
+data_list = []
 
 
-def save_data(file_path: str, data: dict):
+def save_data(file_path: str):
+    data_list.reverse()
     if not os.path.exists(file_path):
         # 文件不存在，创建新的 Excel 文件并写入数据
         workbook = Workbook()
         sheet = workbook.active
-        # 写入表头
-        header = list(data.keys())
-        sheet.append(header)
-        # 写入数据
-        values = list(data.values())
-        sheet.append(values)
-        sheet.append([""])
-        # 保存文件
-        workbook.save(file_path)
-        print("数据已写入新的 Excel 文件")
+        print("数据写入新的 Excel 文件")
     else:
         # 文件存在，打开现有的 Excel 文件并追加数据
         workbook = load_workbook(file_path)
         sheet = workbook.active
         # 写入数据
-        sheet.append([""])
-        header = list(data.keys())
+        print("数据追加到现有的 Excel 文件")
+    for item in data_list:
+        # 写入表头
+        header = list(item.keys())
         sheet.append(header)
-        values = list(data.values())
+        # 写入数据
+        values = list(item.values())
         sheet.append(values)
-        # 保存文件
-        workbook.save(file_path)
-        print("数据已追加到现有的 Excel 文件")
+        sheet.append([""])
+    # 保存文件
+    workbook.save(file_path)
 
 
-@retry(stop_max_attempt_number=3, wait_random_min=1000, wait_random_max=2000, )
+@retry(stop_max_attempt_number=5, wait_random_min=1000, wait_random_max=2000, )
 def get_content(url: str) -> str:
     response = req_session.get(url)
     if "?WebShieldSessionVerify" in response.text:
-        verify_str = re.findall(r"html\?(.*?)\"", response.text)
-        url += "?" + verify_str[0]
+        # verify_str = re.findall(r"html\?(.*?)\"", response.text)
+        # url += "?" + verify_str[0]
+        time.sleep(random.uniform(0, 1))
         raise Exception
     return response.text
 
@@ -80,7 +76,7 @@ def parse_articles_list(html_text: str) -> tuple:
     try:
         # 使用解析器解析 HTML 字符串
         tree = etree.HTML(html_text)
-        max_page = tree.xpath('//div[@class="digg"]/span[text()="..."]')[0].getnext().text.strip()
+        max_page = tree.xpath('//div[@class="digg"]/*[text()="下一页»"]')[0].getprevious().text.strip()
         # 使用 XPath 表达式来提取数据
         li_elements = tree.xpath(f'//div[@class="newsList"]/ul/li/a[contains(.//div[@class="newsTitle"], "{title}")]')
         arr = [
@@ -98,9 +94,11 @@ def parse_data(html_text: str) -> dict:
     try:
         # 使用解析器解析 HTML 字符串
         tree = etree.HTML(html_text)
-        title = tree.xpath("//div[@class='titleWrap']/div[@class='title']/text()")[0].strip()
-        matches = re.findall(r"\d+", title)
-        date_obj = datetime.strptime(matches[0], "%Y%m%d").date()
+        # title = tree.xpath("//div[@class='titleWrap']/div[@class='title']/text()")[0].strip()
+        # matches = re.findall(r"\d+", title)
+        title = tree.xpath("//div[@class='info']/text()")[0].strip()
+        matches = re.findall(r"(\d+-\d+-\d+)", title)
+        date_obj = datetime.strptime(matches[0], "%Y-%m-%d").date()
 
         # 将日期对象转换为指定格式的日期字符串
         formatted_date_str = date_obj.strftime("%Y/%m/%d")
@@ -114,15 +112,15 @@ def parse_data(html_text: str) -> dict:
             if name[0] in ['岩滩站', '天峨站', '大化站']:
                 values = row.getnext().xpath('.//span/text()')[0]
                 data[name[0] + "水位"] = values.strip() + "米"
-        hubs = tree.xpath('//span[contains(text(), "枢纽下泄流量")]')
+        hubs = tree.xpath('//span[contains(text(), "下泄流量")]')
         if len(hubs) == 1:
-            d = re.findall(r'(\w+枢纽下泄流量)\s*([\d\.]+m³/s)', hubs[0].text)
+            d = re.findall(r'(\w+下泄流量)\s*([\d\.]+m³/s)', hubs[0].text)
             for i in d:
-                if i[0][:3] in ["龙滩枢", "岩滩枢", "大化枢", "百龙滩", "乐滩枢", "桥巩枢", "大藤峡"]:
+                if i[0][:3] in ["龙滩枢", "岩滩枢", "大化枢", "百龙滩", "乐滩枢", "桥巩枢", "大藤峡", "龙滩电", "岩滩电", "大化电", "乐滩电", "桥巩电"]:
                     data[i[0]] = i[1]
         for span in hubs:
             span_text = span.text[1:4]
-            if span_text in ["龙滩枢", "岩滩枢", "大化枢", "百龙滩", "乐滩枢", "桥巩枢", "大藤峡"]:
+            if span_text in ["龙滩枢", "岩滩枢", "大化枢", "百龙滩", "乐滩枢", "桥巩枢", "大藤峡", "龙滩电", "岩滩电", "大化电", "乐滩电", "桥巩电"]:
                 water_flow = span.xpath('following-sibling::span[1]//text()')[0]
                 data[span.text[1:]] = water_flow
     except Exception as e:
@@ -144,7 +142,8 @@ def run(file_path: str):
                 print(item)
                 item_html = get_content(item[0])
                 water_data = parse_data(item_html)
-                save_data(file_path, water_data)
+                # save_data(file_path, water_data)
+                data_list.append(water_data)
             if page == max_page:
                 break
     else:
@@ -159,11 +158,13 @@ def run(file_path: str):
                 print(item)
                 item_html = get_content(item[0])
                 water_data = parse_data(item_html)
-                water_data["url"] = item[0]
-                save_data(file_path, water_data)
-            if page == max_page:
+                data_list.append(water_data)
+                # water_data["url"] = item[0]
+                # save_data(file_path, water_data)
+            if page >= max_page:
                 break
-            time.sleep(random.uniform(0, 1))
+            # time.sleep(random.uniform(0, 1))
+    save_data(file_path)
     print(f"------------------------ 程序运行结束 ------------------------")
 
 

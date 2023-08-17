@@ -77,7 +77,7 @@ def get_content(data: list) -> list:
     url = f"https://www.wikidata.org/wiki/{data[1]}"
     # 使用代理
     # response = requests.get(url=url, headers=headers, proxies=proxies)
-    response = requests.get(url=url, headers=headers, proxies=proxies)
+    response = requests.get(url=url, headers=headers)
     html_content = response.text
     # 使用BeautifulSoup解析网页内容
     soup = BeautifulSoup(html_content, "html.parser")

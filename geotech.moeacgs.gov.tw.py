@@ -153,41 +153,49 @@ def save_drill_img(image_data, img_file):
     image_stream.close()
 
 
-def spider(dril_obj: dict):
+def spider_coord(coord: dict, path: str) -> list:
+    spider_data = []
+    coord_path = f"{path}/{coord['holePointNo']}"
+    make_dirs(coord_path)
+    for mode in ["BaseData", "Test", "Chart", "DrillImage"]:
+        if mode == "DrillImage":
+            mode_data = get_drill_image(key_id=coord["keyid"])
+        else:
+            mode_data = get_geo_report(mode=mode, project_key_id=coord["projectKeyid"], key_id=coord["keyid"])
+        num = 1
+        for info in mode_data:
+            if mode == "BaseData":
+                info_file_path = f"{coord_path}/基本信息_{num}.txt"
+                coord_info = save_info(info, info_file_path)
+                if coord_info:
+                    spider_data = coord_info
+            elif mode == "Test":
+                # 设置Excel文件名
+                excel_file = f"{coord_path}/试验资料_{num}.xlsx"
+                save_table(info, excel_file)
+            elif mode == "Chart":
+                img_file = f"{coord_path}/{coord['holePointNo']}_{num}.jpg"
+                save_chart_img(info, img_file)
+            else:
+                img_file = f"{coord_path}/{coord['holePointNo']}_岩心照片_{num}.jpg"
+                save_drill_img(info, img_file)
+    return spider_data
+
+
+def spider(dril_obj: dict) -> list:
     global folder
     if dril_obj["projName"] is None:
-        return False
+        return []
     path = f"{folder}/{dril_obj['projName']}"
     make_dirs(path)
-    spider_data = []
     coords_list = get_dr_coords_json(dril_obj["keyid"])
     projects_num[dril_obj['projName']] = len(coords_list)
-    for coord in coords_list:
-        coord_path = f"{path}/{coord['holePointNo']}"
-        make_dirs(coord_path)
-        for mode in ["BaseData", "Test", "Chart", "DrillImage"]:
-            if mode == "DrillImage":
-                mode_data = get_drill_image(key_id=coord["keyid"])
-            else:
-                mode_data = get_geo_report(mode=mode, project_key_id=coord["projectKeyid"], key_id=coord["keyid"])
-            num = 1
-            for info in mode_data:
-                if mode == "BaseData":
-                    info_file_path = f"{coord_path}/基本信息_{num}.txt"
-                    coord_info = save_info(info, info_file_path)
-                    if coord_info:
-                        spider_data.append(coord_info)
-                elif mode == "Test":
-                    # 设置Excel文件名
-                    excel_file = f"{coord_path}/试验资料_{num}.xlsx"
-                    save_table(info, excel_file)
-                elif mode == "Chart":
-                    img_file = f"{coord_path}/{coord['holePointNo']}_{num}.jpg"
-                    save_chart_img(info, img_file)
-                else:
-                    img_file = f"{coord_path}/{coord['holePointNo']}_岩心照片_{num}.jpg"
-                    save_drill_img(info, img_file)
-    return spider_data
+    max_threads = 20
+    with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
+        futures = [executor.submit(spider_coord, value, path) for value in coords_list]
+        concurrent.futures.wait(futures)
+        results = [future.result() for future in futures if future.result()]
+    return results
 
 
 def run():

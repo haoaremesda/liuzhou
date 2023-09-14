@@ -1,3 +1,5 @@
+import re
+
 import requests
 
 
@@ -102,6 +104,8 @@ def query_baidu(key_words: str):
     ]
     response = requests.get('https://www.baidu.com/s', params=params, headers=headers)
     print(response.text)
+    data = re.findall(r'"title":"([^"]*)".*"contentText":"([^"]*)"', response.text)
+    print(data)
 
 
-query_baidu()
+query_baidu("平安银行杨军新一代信息技术产业")

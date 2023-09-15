@@ -154,7 +154,6 @@ def save_drill_img(image_data, img_file):
 
 
 def spider_coord(coord: dict, path: str) -> list:
-    print(coord["keyid"])
     spider_data = []
     coord_path = f"{path}/{coord['holePointNo']}"
     make_dirs(coord_path)
@@ -185,18 +184,19 @@ def spider_coord(coord: dict, path: str) -> list:
 
 def spider(dril_obj: dict) -> list:
     global folder
-    print(dril_obj['projName'])
     if dril_obj["projName"] is None:
         return []
+    print(dril_obj['projName'], "---正在开始")
     path = f"{folder}/{dril_obj['projName']}"
     make_dirs(path)
     coords_list = get_dr_coords_json(dril_obj["keyid"])
     projects_num[dril_obj['projName']] = len(coords_list)
-    max_threads = 2
+    max_threads = 20
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider_coord, value, path) for value in coords_list]
         concurrent.futures.wait(futures)
         results = [future.result() for future in futures if future.result()]
+    print(dril_obj['projName'], "---爬取结束")
     return results
 
 
@@ -208,7 +208,7 @@ def run():
     # 创建标题行数据
     header = ["鑽孔編號", "鑽孔工程名稱", "計畫編號", "鑽孔地點", "鑽孔地表高程", "座標系統", "孔口X座標", "孔口Y座標",
               "鑽探起始日期", "鑽探完成日期", "鑽機機型", "鑽孔總總深度", "鑽探公司"]
-    max_threads = 2
+    max_threads = 50
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider, value) for value in drill_projects]
         concurrent.futures.wait(futures)

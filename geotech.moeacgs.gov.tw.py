@@ -23,7 +23,7 @@ headers = {
 }
 
 req_session.headers = headers
-proxies = {"http": "http://127.0.0.1:4780", "https": "http://127.0.0.1:4780"}
+proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
 
 
 projects_num = {}
@@ -38,7 +38,7 @@ def make_dirs(path):
         pass
 
 
-@retry(stop_max_attempt_number=5, wait_random_min=1000, wait_random_max=2000)
+@retry(wait_fixed=2000)
 def get_content(url: str, data=None, send_type: str = "POST", is_proxies: bool = True,
                 result_null: bool = False) -> list:
     sends = {"url": url, "verify": False}
@@ -154,6 +154,7 @@ def save_drill_img(image_data, img_file):
 
 
 def spider_coord(coord: dict, path: str) -> list:
+    print(coord["keyid"])
     spider_data = []
     coord_path = f"{path}/{coord['holePointNo']}"
     make_dirs(coord_path)
@@ -184,13 +185,14 @@ def spider_coord(coord: dict, path: str) -> list:
 
 def spider(dril_obj: dict) -> list:
     global folder
+    print(dril_obj['projName'])
     if dril_obj["projName"] is None:
         return []
     path = f"{folder}/{dril_obj['projName']}"
     make_dirs(path)
     coords_list = get_dr_coords_json(dril_obj["keyid"])
     projects_num[dril_obj['projName']] = len(coords_list)
-    max_threads = 20
+    max_threads = 2
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider_coord, value, path) for value in coords_list]
         concurrent.futures.wait(futures)
@@ -202,17 +204,17 @@ def run():
     global folder
     drill_projects = get_drill_projects()
     print("总项目数量：", len(drill_projects))
-    # drill_projects = [{'exename': '', 'orgname': '08215715 高雄市政府捷運工程局', 'keyid': 6, 'projName': '鹽埕行政中心新建工程', 'projNo': '08215715-A08(4)', 'drillHoleCount': 4, 'sReason': '', 'sStatus': '正常'}]
+    # drill_projects = [{'exename': '', 'orgname': '08215715 高雄市政府捷運工程局', 'keyid': 6, 'projName': '鹽埕行政中心新建工程', 'projNo': '08215715-A08(4)', 'drillHoleCount': 4, 'sReason': '', 'sStatus': '正常'}, {'exename': '', 'orgname': '21101573 臺北市停車管理工程處', 'keyid': 8, 'projName': '蘭雅公園附建停車場新建工程', 'projNo': '21101573-95-1018', 'drillHoleCount': 9, 'sReason': '', 'sStatus': '正常'}]
     # 创建标题行数据
     header = ["鑽孔編號", "鑽孔工程名稱", "計畫編號", "鑽孔地點", "鑽孔地表高程", "座標系統", "孔口X座標", "孔口Y座標",
               "鑽探起始日期", "鑽探完成日期", "鑽機機型", "鑽孔總總深度", "鑽探公司"]
-    max_threads = 50
+    max_threads = 2
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider, value) for value in drill_projects]
         concurrent.futures.wait(futures)
         # 获取任务的执行结果
         results = [header] + [item for future in futures for item in future.result()]
-        print("数据长度：", len(results))
+        print("数据长度：", len(results) - 1)
         df = pd.DataFrame(results)
         # 将DataFrame保存为Excel文件
         df.to_excel(f"{folder}/汇总表.xlsx", index=False, header=False)

@@ -23,8 +23,8 @@ headers = {
     'Content-Type': 'application/json; charset=UTF-8',
 }
 
+# 设置代理
 proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
-
 
 projects_num = {}
 
@@ -38,6 +38,14 @@ def make_dirs(path):
         pass
 
 
+def init_session(is_set_cookie=False):
+    req_session = requests.session()
+    req_session.headers = headers
+    if is_set_cookie:
+        url = "https://geotech.moeacgs.gov.tw/imoeagis/Home/Map"
+        get_content(req_session=req_session, url=url, result_null=True, send_type="GET")
+    return req_session
+
 
 @retry(wait_fixed=2000)
 def get_content(req_session: Session, url: str, data=None, send_type: str = "POST", is_proxies: bool = True,
@@ -50,18 +58,12 @@ def get_content(req_session: Session, url: str, data=None, send_type: str = "POS
     else:
         sends["json"] = data
         response = req_session.post(**sends)
+    if response.status_code == 404:
+        req_session = init_session(is_set_cookie=True)
+        raise Exception
     if result_null:
         return []
     return response.json()
-
-
-def init_session(is_set_cookie=False):
-    req_session = requests.session()
-    req_session.headers = headers
-    if is_set_cookie:
-        url = "https://geotech.moeacgs.gov.tw/imoeagis/Home/Map"
-        get_content(req_session=req_session, url=url, result_null=True, send_type="GET")
-    return req_session
 
 
 def get_drill_projects(session) -> list:
@@ -163,11 +165,9 @@ def save_drill_img(image_data, img_file):
     image_stream.close()
 
 
-def spider_coord(coord: dict, path: str, cookies: RequestsCookieJar) -> list:
-    req_session = init_session()
-    req_session.cookies = cookies
+def spider_coord(coord: dict, path: str, req_session: Session) -> list:
     spider_data = []
-    coord_path = f"{path}/{coord['holePointNo']}"
+    coord_path = f"{path}/{coord['holePointNo']}".strip()
     make_dirs(coord_path)
     for mode in ["BaseData", "Test", "Chart", "DrillImage"]:
         if mode == "DrillImage":
@@ -177,19 +177,19 @@ def spider_coord(coord: dict, path: str, cookies: RequestsCookieJar) -> list:
         num = 1
         for info in mode_data:
             if mode == "BaseData":
-                info_file_path = f"{coord_path}/基本信息_{num}.txt"
+                info_file_path = f"{coord_path}/基本信息_{num}.txt".strip()
                 coord_info = save_info(info, info_file_path)
                 if coord_info:
                     spider_data = coord_info
             elif mode == "Test":
                 # 设置Excel文件名
-                excel_file = f"{coord_path}/试验资料_{num}.xlsx"
+                excel_file = f"{coord_path}/试验资料_{num}.xlsx".strip()
                 save_table(info, excel_file)
             elif mode == "Chart":
-                img_file = f"{coord_path}/{coord['holePointNo']}_{num}.jpg"
+                img_file = f"{coord_path}/{coord['holePointNo']}_{num}.jpg".strip()
                 save_chart_img(info, img_file)
             else:
-                img_file = f"{coord_path}/{coord['holePointNo']}_岩心照片_{num}.jpg"
+                img_file = f"{coord_path}/{coord['holePointNo']}_岩心照片_{num}.jpg".strip()
                 save_drill_img(info, img_file)
     print(coord["keyid"])
     return spider_data
@@ -198,20 +198,24 @@ def spider_coord(coord: dict, path: str, cookies: RequestsCookieJar) -> list:
 def spider(dril_obj: dict) -> list:
     global folder
     if dril_obj["projName"] is None:
-        return []
+        return
+    path = f"{folder}/{dril_obj['projName']}".strip()
+    if os.path.exists(path):
+        return
     req_session = init_session(is_set_cookie=True)
     print(dril_obj['projName'], "---正在开始")
-    path = f"{folder}/{dril_obj['projName']}"
     make_dirs(path)
     coords_list = get_dr_coords_json(req_session, dril_obj["keyid"])
     projects_num[dril_obj['projName']] = len(coords_list)
     max_threads = 20
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-        futures = [executor.submit(spider_coord, value, path, req_session.cookies) for value in coords_list]
+        futures = [executor.submit(spider_coord, value, path, req_session) for value in coords_list]
         concurrent.futures.wait(futures)
         results = [future.result() for future in futures if future.result()]
     print(dril_obj['projName'], "---爬取结束")
-    return results
+    df = pd.DataFrame(results)
+    # 将DataFrame保存为Excel文件
+    df.to_excel(f"{folder}/汇总表/{dril_obj['projName']}.xlsx", index=False, header=False)
 
 
 def run():
@@ -224,21 +228,21 @@ def run():
     # 创建标题行数据
     header = ["鑽孔編號", "鑽孔工程名稱", "計畫編號", "鑽孔地點", "鑽孔地表高程", "座標系統", "孔口X座標", "孔口Y座標",
               "鑽探起始日期", "鑽探完成日期", "鑽機機型", "鑽孔總總深度", "鑽探公司"]
-    max_threads = 30
+    max_threads = 10
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider, value) for value in drill_projects]
         concurrent.futures.wait(futures)
         # 获取任务的执行结果
-        results = [header] + [item for future in futures for item in future.result()]
-        print("数据长度：", len(results) - 1)
-        df = pd.DataFrame(results)
-        # 将DataFrame保存为Excel文件
-        df.to_excel(f"{folder}/汇总表.xlsx", index=False, header=False)
-        df = pd.DataFrame([list(i) for i in projects_num.items()])
-        df.to_excel(f"{folder}/项目量表.xlsx", index=False, header=False)
+        # results = [header] + [item for future in futures for item in future.result()]
+        # print("数据长度：", len(results) - 1)
+        # df = pd.DataFrame(results)
+        # # 将DataFrame保存为Excel文件
+        # df.to_excel(f"{folder}/汇总表.xlsx", index=False, header=False)
+        # df = pd.DataFrame([list(i) for i in projects_num.items()])
+        # df.to_excel(f"{folder}/项目量表.xlsx", index=False, header=False)
 
 
 if __name__ == '__main__':
     folder = "./项目"
-    make_dirs(folder)
+    make_dirs(f"{folder}/汇总表")
     run()

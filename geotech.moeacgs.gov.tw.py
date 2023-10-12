@@ -1,4 +1,7 @@
+import copy
 import os.path
+
+import chardet as chardet
 import requests
 from retrying import retry
 import pandas as pd
@@ -16,14 +19,16 @@ req_session = requests.session()
 
 headers = {
     'Accept': 'application/json, text/javascript, */*; q=0.01',
-    'Referer': 'https://geotech.moeacgs.gov.tw/imoeagis/js/WebWorker/GetProjectList.js?v=0331',
+    'Referer': 'https://geotech.moeacgs.gov.tw/imoeagis/js/WebWorker/GetGeoReport.js?v=1695029799130',
     'X-Requested-With': 'XMLHttpRequest',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.31',
     'Content-Type': 'application/json; charset=UTF-8',
 }
 
 req_session.headers = headers
-proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
+
+# 设置代理
+proxies = {"http": "http://127.0.0.1:4780", "https": "http://127.0.0.1:4780"}
 
 
 projects_num = {}
@@ -38,6 +43,11 @@ def make_dirs(path):
         pass
 
 
+def remove_special_characters(strings):
+    special_characters = "!$%^&*{}[]|\:;'<>?./\""
+    return "".join([string for string in strings if not any(char in special_characters for char in string)])
+
+
 @retry(wait_fixed=2000)
 def get_content(url: str, data=None, send_type: str = "POST", is_proxies: bool = True,
                 result_null: bool = False) -> list:
@@ -49,6 +59,8 @@ def get_content(url: str, data=None, send_type: str = "POST", is_proxies: bool =
     else:
         sends["json"] = data
         response = req_session.post(**sends)
+    if response.status_code == 404:
+        return []
     if result_null:
         return []
     return response.json()
@@ -88,14 +100,15 @@ def save_info(html_string: str, file_path: str) -> list:
     table = soup.find('table', class_='BaseDataCss')
     item = []
     # 打开文件以写入模式，如果文件存在则覆盖
-    with open(file_path, 'w') as file:
+    with open(file_path, 'w', encoding="utf-8") as file:
         # 遍历数据字典，将数据写入文件
         for row in table.find_all('tr'):
             # 获取表格行中的标题和数据单元格
             th = row.find('th')
             td = row.find('td')
-            item.append(td.text.strip())
-            file.write(f"{th.text.strip()}:     {td.text.strip()}\n")
+            td_text = td.text.replace('\r', '').replace('\n', '').strip().replace('聯', '').replace('行', '行')
+            item.append(td_text)
+            file.write(f"{th.text.strip()}:     {td_text}\n")
     # 输出文件已写入
     # print(f"数据已写入文件：{file_path}")
     return item
@@ -139,7 +152,9 @@ def save_chart_img(html_string, img_file):
 
 
 def save_drill_img(image_data, img_file):
-    image_data = image_data.split(",")[1]  # 去除"data:image/jpeg;base64,"前缀
+    if not image_data:
+        return
+    image_data = image_data['imagePath'].split(",")[1]  # 去除"data:image/jpeg;base64,"前缀
     # 解码 Base64 数据
     decoded_data = base64.b64decode(image_data)
     # 创建一个字节流对象
@@ -155,7 +170,8 @@ def save_drill_img(image_data, img_file):
 
 def spider_coord(coord: dict, path: str) -> list:
     spider_data = []
-    coord_path = f"{path}/{coord['holePointNo']}"
+    coord['holePointNo'] = remove_special_characters(coord['holePointNo']).replace("\r", "").replace("\n", "")
+    coord_path = f"{path}/{coord['holePointNo']}".strip()
     make_dirs(coord_path)
     for mode in ["BaseData", "Test", "Chart", "DrillImage"]:
         if mode == "DrillImage":
@@ -179,47 +195,95 @@ def spider_coord(coord: dict, path: str) -> list:
             else:
                 img_file = f"{coord_path}/{coord['holePointNo']}_岩心照片_{num}.jpg"
                 save_drill_img(info, img_file)
+    print(coord["keyid"])
     return spider_data
 
 
-def spider(dril_obj: dict) -> list:
+def spider(dril_obj: dict):
     global folder
-    if dril_obj["projName"] is None:
-        return []
-    print(dril_obj['projName'], "---正在开始")
+    # dril_obj['projName'] = remove_special_characters(dril_obj['projName']).replace("\r", "").replace("\n", "").strip()
     path = f"{folder}/{dril_obj['projName']}"
+    if os.path.exists(path):
+        return
+    print(dril_obj['projName'], "---正在开始")
     make_dirs(path)
     coords_list = get_dr_coords_json(dril_obj["keyid"])
     projects_num[dril_obj['projName']] = len(coords_list)
-    max_threads = 20
+    max_threads = 10
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider_coord, value, path) for value in coords_list]
         concurrent.futures.wait(futures)
-        results = [future.result() for future in futures if future.result()]
+        # results = [future.result() for future in futures if future.result()]
     print(dril_obj['projName'], "---爬取结束")
-    return results
 
 
 def run():
     global folder
     drill_projects = get_drill_projects()
-    print("总项目数量：", len(drill_projects))
-    # drill_projects = [{'exename': '', 'orgname': '08215715 高雄市政府捷運工程局', 'keyid': 6, 'projName': '鹽埕行政中心新建工程', 'projNo': '08215715-A08(4)', 'drillHoleCount': 4, 'sReason': '', 'sStatus': '正常'}, {'exename': '', 'orgname': '21101573 臺北市停車管理工程處', 'keyid': 8, 'projName': '蘭雅公園附建停車場新建工程', 'projNo': '21101573-95-1018', 'drillHoleCount': 9, 'sReason': '', 'sStatus': '正常'}]
+    drill_projects2 = []
+    for i in drill_projects:
+        if i["projName"] is None:
+            continue
+        i['projName'] = remove_special_characters(i['projName']).strip().replace("\r", "").replace("\n", "")
+        path = f"{folder}/{remove_special_characters(i['projName'])}"
+        if os.path.exists(path):
+            continue
+        drill_projects2.append(i)
+    print("需要爬取的项目数量：", len(drill_projects2))
     # 创建标题行数据
-    header = ["鑽孔編號", "鑽孔工程名稱", "計畫編號", "鑽孔地點", "鑽孔地表高程", "座標系統", "孔口X座標", "孔口Y座標",
-              "鑽探起始日期", "鑽探完成日期", "鑽機機型", "鑽孔總總深度", "鑽探公司"]
-    max_threads = 50
+    datas = [["鑽孔編號", "鑽孔工程名稱", "計畫編號", "鑽孔地點", "鑽孔地表高程", "座標系統", "孔口X座標", "孔口Y座標",
+              "鑽探起始日期", "鑽探完成日期", "鑽機機型", "鑽孔總總深度", "鑽探公司"]]
+    max_threads = 5
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-        futures = [executor.submit(spider, value) for value in drill_projects]
+        futures = [executor.submit(spider, value) for value in drill_projects2]
         concurrent.futures.wait(futures)
-        # 获取任务的执行结果
-        results = [header] + [item for future in futures for item in future.result()]
-        print("数据长度：", len(results) - 1)
-        df = pd.DataFrame(results)
-        # 将DataFrame保存为Excel文件
-        df.to_excel(f"{folder}/汇总表.xlsx", index=False, header=False)
-        df = pd.DataFrame([list(i) for i in projects_num.items()])
-        df.to_excel(f"{folder}/项目量表.xlsx", index=False, header=False)
+    items = os.listdir(folder)
+    subfolders = [item for item in items if os.path.isdir(os.path.join(folder, item))]
+    for subfolder in subfolders:
+        subfolderx = f"{folder}/{subfolder}"
+        # 遍历目录下的文件夹
+        for folder_name in os.listdir(subfolderx):
+            folder_pathx = os.path.join(subfolderx, folder_name)
+            # 检查是否是文件夹
+            if os.path.isdir(folder_pathx):
+                # 构建基本信息_1.txt文件的完整路径
+                file_path = os.path.join(folder_pathx, '基本信息_1.txt')
+                # 检查文件是否存在
+                if os.path.exists(file_path):
+                    # 使用检测到的编码方式打开文件并读取内容
+                    with open(file_path, 'rb') as file:
+                        raw_data = file.read()
+                        result = chardet.detect(raw_data)
+                        file_encoding = result['encoding']
+                        if file_encoding == "GB2312":
+                            file_encoding = "GBK"
+                    with open(file_path, 'r', encoding=file_encoding) as file:
+                        file_content = file.read()
+                        # 初始化一个空列表
+                        data_list = []
+                        # 以换行符分割文本内容
+                        lines = file_content.split('\n')
+                        # 遍历每一行
+                        for line in lines:
+                            # 使用冒号分割每行，获取右侧的值
+                            if not line or ":" not in line:
+                                continue
+                            if "鑽孔工程名稱" in line:
+                                data_list.append(subfolder)
+                                continue
+                            try:
+                                d = line.split(':')
+                                value = "".join(d[1:])
+                            except:
+                                print(line)
+                            # 去除多余的空格并添加到列表
+                            data_list.append(value.strip())
+                        datas.append(data_list)
+                    # 在这里可以对文件内容进行处理，例如打印或者存储到另一个地方
+                else:
+                    datas.append([folder_name, subfolder])
+    df = pd.DataFrame(datas)
+    df.to_excel(f"{folder}/汇总表.xlsx", index=False, header=False)
 
 
 if __name__ == '__main__':

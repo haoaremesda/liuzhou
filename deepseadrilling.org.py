@@ -89,8 +89,8 @@ def save_pdf(pdf_url: str):
 if __name__ == '__main__':
     folder = "./deepseadrilling_pdfs"
     url = "http://www.deepseadrilling.org/i_reports.htm"
-    # url_list = parse_url_list(url)
-    url_list = ["http://www.deepseadrilling.org/15/dsdp_toc.htm"]
+    url_list = parse_url_list(url)
+    # url_list = ["http://www.deepseadrilling.org/87/dsdp_toc.htm"]
     pdf_url_list = parse_pdf_url_list(url_list)
     max_threads = 1
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
@@ -101,6 +101,5 @@ if __name__ == '__main__':
             try:
                 result = future.result()
                 processed_data.append(result)
-                print(f"Processed: {result}")
             except Exception as e:
                 print(f"Error processing : {e}")

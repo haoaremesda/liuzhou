@@ -49,8 +49,9 @@ def parse_pdf_url_list(urls: list) -> list:
     url_list = []
     req_session = init_req()
     for i in urls:
+        index_url = f"http://www.deepseadrilling.org/{i}"
         try:
-            req = req_session.get(url=i, proxies=proxies)
+            req = req_session.get(url=index_url, proxies=proxies)
             if req.status_code == 200:
                 # 使用解析器解析 HTML 字符串
                 html_text = req.text

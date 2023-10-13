@@ -21,10 +21,10 @@ headers = {
 req_session.headers = headers
 
 
-def get_file_names() -> list:
+def get_file_names() -> dict:
     # 获取用户输入的目录路径
     directory = input("请输入目录路径: ")
-    file_names_without_extension = []
+    file_names_without_extension = {}
     # 检查输入路径是否存在
     if os.path.exists(directory) and os.path.isdir(directory):
         # 使用os库列出目录下的所有文件和子目录
@@ -34,35 +34,51 @@ def get_file_names() -> list:
             entry_path = os.path.join(directory, entry)
             if os.path.isfile(entry_path):  # 仅包括文件，不包括子目录
                 file_name = os.path.splitext(entry)[0]  # 获取文件名（不包括后缀）
-                file_names_without_extension.append(file_name)
+                file_names_without_extension[file_name] = ""
         print(f"该目录下有文件数量 {len(file_names_without_extension)}")
     else:
         print("指定的目录路径不存在或不是目录。")
     return file_names_without_extension
 
 
+proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
+
+
 def query_state(keywords: str):
-    state = []
     params = {
         'q': keywords,
         'tid': '',
     }
-    response = req_session.get('https://std.samr.gov.cn/search/stdPage', params=params)
-    if response.status_code == 200:
-        tree = etree.HTML(response.text)
-        state = tree.xpath("//span[@class='s-status label label-success']/text()")
-    else:
-        print(keywords, "    查询失败")
-    if len(state) >= 1:
-        return "|".join(state)
-    else:
-        return ""
+    try:
+        response = req_session.get('https://std.samr.gov.cn/search/stdPage', params=params, proxies=proxies)
+        if response.status_code == 200:
+            tree = etree.HTML(response.text)
+            # 使用XPath表达式选择所有class为s-title的表格
+            tables = tree.xpath('//div[@class="post-head"]/table')
+            # 遍历每个表格
+            for table in tables:
+                rows = table.xpath('.//tr')
+                # 假设每个表格都有相同数量的行
+                for i in rows:
+                    tds = i.xpath('.//td')
+                    if len(tds) == 2:
+                        standard_numbe = tds[0].xpath('./a//text()')
+                        # 提取td的值并对应起来
+                        state = tds[1].xpath('./span/text()')
+                        print(f"Table {table} - Row {i + 1}: {standard_numbe} - {td2}")
+                    else:
+                        print("未查询到结果")
+        else:
+            print(keywords[0], "    查询失败")
+    except Exception as e:
+        print(e)
 
 
-file_names = ["GB/T 40373-2021", "GB 8921-2011", "GB 6763-2000"]
 # file_names = get_file_names()
-for i in file_names:
-    print(query_state(i))
+file_names = {"GB/T 40373-2021": "", "GB 8921-2011": "", "GB 6763-2000": ""}
+for i in file_names.items():
+    query_state(i[0])
+    print(i)
 
 # 等待用户输入以结束程序
 input("按Enter键以结束程序...")

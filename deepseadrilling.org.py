@@ -48,8 +48,9 @@ def parse_url_list(index_url: str) -> list:
 def parse_pdf_url_list(urls: list) -> list:
     url_list = []
     req_session = init_req()
+    doman = "http://www.deepseadrilling.org"
     for i in urls:
-        index_url = f"http://www.deepseadrilling.org/{i}"
+        index_url = f"{doman}/{i}"
         try:
             req = req_session.get(url=index_url, proxies=proxies)
             if req.status_code == 200:
@@ -61,10 +62,10 @@ def parse_pdf_url_list(urls: list) -> list:
                     for x in href_list:
                         if ".." in x:
                             x = x.replace("..", "")
-                            url_list.append(f"http://www.deepseadrilling.org{x}")
+                            url_list.append(f"{doman}{x}")
                         else:
-                            doman = i.split('/')[:-1]
-                            url_list.append(f"{'/'.join(doman)}/{x}")
+                            start_u = index_url.split('/')[:-1]
+                            url_list.append(f"{'/'.join(start_u)}/{x}")
         except Exception as e:
             print(f"------------------------ 解析URL异常 {e} ------------------------")
     return list(set(url_list))
@@ -91,9 +92,9 @@ if __name__ == '__main__':
     folder = "./deepseadrilling_pdfs"
     url = "http://www.deepseadrilling.org/i_reports.htm"
     url_list = parse_url_list(url)
-    # url_list = ["http://www.deepseadrilling.org/87/dsdp_toc.htm"]
+    # url_list = ["20/dsdp_toc.htm"]
     pdf_url_list = parse_pdf_url_list(url_list)
-    max_threads = 1
+    max_threads = 5
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(save_pdf, value) for value in pdf_url_list]
         concurrent.futures.wait(futures)

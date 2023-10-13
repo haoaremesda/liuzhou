@@ -45,6 +45,7 @@ proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
 
 
 def query_state(keywords: str):
+    global file_names
     params = {
         'q': keywords,
         'tid': '',
@@ -63,9 +64,12 @@ def query_state(keywords: str):
                     tds = i.xpath('.//td')
                     if len(tds) == 2:
                         standard_numbe = tds[0].xpath('./a//text()')
-                        # 提取td的值并对应起来
+                        standard_numbe = "".join(standard_numbe).replace("\xa0", "").replace(" ", "")
+                        keywords_strip = keywords.strip().replace(" ", "")
                         state = tds[1].xpath('./span/text()')
-                        print(f"Table {table} - Row {i + 1}: {standard_numbe} - {td2}")
+                        if standard_numbe in keywords_strip:
+                            file_names[keywords] = "|".join(state)
+                        print(f"Table {table} - Row {i + 1}: {standard_numbe} - {state}")
                     else:
                         print("未查询到结果")
         else:

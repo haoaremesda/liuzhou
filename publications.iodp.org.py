@@ -63,10 +63,16 @@ def save_pdf(sp_url: str):
                 s.append(u)
                 url = "/".join(s)
             u = u.replace("/", "&")
-            pdf_resp = req_session.get(url=url, stream=True)
-            with open(f'{path_folder}/{u}', 'wb') as fd:
-                for chunk in pdf_resp.iter_content(5120):
-                    fd.write(chunk)
+            max_retries = 3
+            for _ in range(max_retries):
+                try:
+                    pdf_resp = req_session.get(url=url, stream=True, timeout=120)
+                    with open(f'{path_folder}/{u}', 'wb') as fd:
+                        for chunk in pdf_resp.iter_content(5120):
+                            fd.write(chunk)
+                    break  # 如果下载成功，退出循环
+                except Exception as e:
+                    print(f"An error occurred: {str(e)}")
             print("爬取完成：", f'{path_folder}/{u}')
     else:
         print(resp.status_code, resp.text)
@@ -77,7 +83,7 @@ if __name__ == '__main__':
     url = "http://publications.iodp.org/index.html"
     url_list = parse_url_list(url)
     # url_list = ["https://doi.org/10.2204/iodp.sp.349.2013", "https://doi.org/10.14379/iodp.pr.349.2014", "https://doi.org/10.14379/iodp.proc.349.2015"]
-    max_threads = 5
+    max_threads = 3
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(save_pdf, value) for value in url_list]
         concurrent.futures.wait(futures)

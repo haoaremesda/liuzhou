@@ -67,9 +67,9 @@ def query_state(keywords: str):
                         standard_numbe = "".join(standard_numbe).replace("\xa0", "").replace(" ", "")
                         keywords_strip = keywords.strip().replace(" ", "")
                         state = tds[1].xpath('./span/text()')
-                        if standard_numbe in keywords_strip:
+                        if keywords_strip in standard_numbe:
                             file_names[keywords] = "|".join(state)
-                        print(f"Table {table} - Row {i + 1}: {standard_numbe} - {state}")
+                            print(keywords, state)
                     else:
                         print("未查询到结果")
         else:
@@ -82,7 +82,6 @@ def query_state(keywords: str):
 file_names = {"GB/T 40373-2021": "", "GB 8921-2011": "", "GB 6763-2000": ""}
 for i in file_names.items():
     query_state(i[0])
-    print(i)
 
 # 等待用户输入以结束程序
 input("按Enter键以结束程序...")

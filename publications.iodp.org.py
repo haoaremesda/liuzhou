@@ -1,7 +1,11 @@
 import os
 from lxml import etree
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
 import concurrent.futures
+
+# 禁用安全请求警告
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 headers = {
     'authority': 'doi.org',
@@ -21,7 +25,8 @@ headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
 }
 
-proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
+# proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
+proxies = {}
 
 
 def init_req() -> requests.sessions.Session:
@@ -34,7 +39,7 @@ def parse_url_list(index_url: str) -> list:
     url_list = []
     try:
         req_session = init_req()
-        req = req_session.get(url=index_url, proxies=proxies)
+        req = req_session.get(url=index_url, verify=False, proxies=proxies)
         if req.status_code == 200:
             # 使用解析器解析 HTML 字符串
             html_text = req.text
@@ -48,7 +53,7 @@ def parse_url_list(index_url: str) -> list:
 def save_pdf(sp_url: str):
     global folder
     req_session = init_req()
-    resp = req_session.get(url=sp_url, proxies=proxies)
+    resp = req_session.get(url=sp_url, verify=False, proxies=proxies)
     if resp.status_code == 200:
         tree = etree.HTML(resp.text.encode('utf-8'))
         pdf_urls = tree.xpath("//a[substring(@href, string-length(@href) - 3) = '.PDF']/@href")
@@ -66,13 +71,13 @@ def save_pdf(sp_url: str):
             max_retries = 3
             for _ in range(max_retries):
                 try:
-                    pdf_resp = req_session.get(url=url, stream=True, timeout=120)
+                    pdf_resp = req_session.get(url=url, stream=True, verify=False, timeout=120)
                     with open(f'{path_folder}/{u}', 'wb') as fd:
                         for chunk in pdf_resp.iter_content(5120):
                             fd.write(chunk)
                     break  # 如果下载成功，退出循环
                 except Exception as e:
-                    print(f"An error occurred: {str(e)}")
+                    print(url, f"An error occurred: {str(e)}")
             print("爬取完成：", f'{path_folder}/{u}')
     else:
         print(resp.status_code, resp.text)

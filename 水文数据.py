@@ -4,6 +4,7 @@ import time
 import requests
 from datetime import datetime, timedelta
 from requests_toolbelt.multipart.encoder import MultipartEncoder
+import pandas as pd
 
 req_session = requests.session()
 req_session.headers = {
@@ -47,20 +48,21 @@ def get_schwr_data():
                     ynswj_data["蓄水池"][i["stnm"]] = str(i["w"]) if i["w"] else "-"
 
 
-def send_sczwfw_data(url, app_id, interface_id, currentPage, pageSize, fieldValue, sign = "") -> tuple:
+def send_sczwfw_data(url, app_id, interface_id, currentPage, pageSize, fieldValue, timestamp, sign="", json_data=None) -> tuple:
     req_session = requests.session()
     req_session.headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"}
-    json_data = {
-            "app_id": app_id,
-            "interface_id": interface_id,
-            "charset": "UTF-8",
-            "timestamp": str(int(time.time() * 1e3)),
-            "biz_content": json.dumps({"currentPage": currentPage, "pageSize": pageSize, "conditionList": [
-                {"fieldEn": "zhanming", "fieldValue": fieldValue, "whereCondition": "="}]}),
-            "origin": "0",
-            "version": "1",
-        }
+    if not json_data:
+        json_data = {
+                "app_id": app_id,
+                "interface_id": interface_id,
+                "charset": "UTF-8",
+                "timestamp": timestamp,
+                "biz_content": json.dumps({"currentPage": currentPage, "pageSize": pageSize, "conditionList": [
+                    {"fieldEn": "zhanming", "fieldValue": fieldValue, "whereCondition": "="}]}),
+                "origin": "0",
+                "version": "1",
+            }
     if sign:
         json_data["sign"] = sign
     multipart_data = MultipartEncoder(
@@ -73,17 +75,59 @@ def send_sczwfw_data(url, app_id, interface_id, currentPage, pageSize, fieldValu
 
 
 def get_sczwfw_data():
-    global sczwfw_data, sczwfw_names
+    global sczwfw_data, sczwfw_names, fields
     createsign_do_url = "https://tftb.sczwfw.gov.cn:8085/jmas-api-gateway-server/createsign.do"
     gateway_do_url = "https://tftb.sczwfw.gov.cn:8085/jmas-api-gateway-server/gateway.do"
+    for i in sczwfw_names:
+        station_datas = []
+        total = 0
+        page, page_size = 1, 60
+        if i in ['雅江（三）', '桐子林（二）']:
+            columns = {"zhanming": "站名", "zm": "站码", "sj": "时间", "sw": "水位（m）", "hlmc": "河流名称", "xzqh": "行政区划", "lymc": "流域名称", "ll": "流量(m³/s)"}
+            app_id, interface_id = "sltqszdhdsssqxxpc", "sltqszdhdsssqxx"
+        else:
+            columns = {"zhanming": "站名", "zm": "站码", "hlmc": "河流名称", "xzqh": "行政区划", "lymc": "流域名称", "ksw": "库水位（m）", "rkll": "入库流量（m3/s）", "ckll": "出库流量（m3/s）", "xsl": "蓄水量 (百万m² )", "sj": "时间"}
+            app_id, interface_id = "sltqszdsksssqxxpc", "sltqszdsksssqxx"
+        while True:
+            if total != 0 and (page_size * page - total) >= page_size:
+                break
+            timestamp = str(int(time.time() * 1e3))
+            sign_code, sign_json_data = send_sczwfw_data(createsign_do_url, app_id, interface_id, page, page_size, i, timestamp)
+            if sign_code == 200 and sign_json_data["success"]:
+                sign = sign_json_data["data"]["sign"]
+                status_code, json_data = send_sczwfw_data(gateway_do_url, app_id, interface_id, page, page_size, i, timestamp, sign)
+                if status_code == 200:
+                    d = json.loads(json_data["data"])
+                    if d["status"] == 0:
+                        if 'list' in d['result']['data']:
+                            if total == 0:
+                                total = d['result']['data']['total']
+                            for item in d['result']['data']['list']:
+                                station_datas.append([item[s] if s in item else '' for s in columns])
+                            page += 1
+                        else:
+                            print(d)
+                            break
+                else:
+                    print(status_code, json_data)
+                    time.sleep(10)
+            else:
+                print(sign_code, sign_json_data)
+                time.sleep(10)
+        station_datas.reverse()
+        df = pd.DataFrame(station_datas, columns=list(columns.values()))
+        # 将DataFrame保存为Excel文件
+        df.to_excel(f'{i}.xlsx', index=False)
+
 
 
 
 
 
 if __name__ == '__main__':
+    fields = ["水位", "出库流量", "入库流量", "蓄水池"]
     ynswj_names = ['黄登', '大华桥', '苗尾', '功果桥', '小湾', '乌东德', '糯扎渡', '景洪', '溪洛渡水库', '向家坝水库']
-    ynswj_data = {i: {s: "-" for s in ynswj_names} for i in ["水位", "出库流量", "入库流量", "蓄水池"]}
+    ynswj_data = {i: {s: "-" for s in ynswj_names} for i in fields}
     sczwfw_names = ['雅江（三）', '桐子林（二）', '二滩', '锦屏', '官地']
     sczwfw_data = {}
     # get_ynswj_data()

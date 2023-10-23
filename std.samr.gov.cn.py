@@ -1,6 +1,9 @@
+import re
+
 import requests
 from lxml import etree
 import os
+import pandas as pd
 
 
 req_session = requests.session()
@@ -19,6 +22,17 @@ headers = {
 }
 
 req_session.headers = headers
+
+
+# 定义一个函数，用于提取行业标准编码
+def extract_standard_code(text):
+    # 使用正则表达式匹配带斜杠的标准编码模式
+    pattern = r'[A-Z]+[/A-Z\s\d-]+'
+    match = re.search(pattern, text)
+    if match:
+        return match.group()
+    else:
+        return None
 
 
 def get_file_names() -> dict:
@@ -41,21 +55,23 @@ def get_file_names() -> dict:
     return file_names_without_extension
 
 
-proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
-
-
-def query_state(keywords: str):
+def query_state(old_keywords: str):
     global file_names
+    keywords = extract_standard_code(old_keywords).strip()
+    if not keywords:
+        return False
     params = {
         'q': keywords,
         'tid': '',
     }
     try:
-        response = req_session.get('https://std.samr.gov.cn/search/stdPage', params=params, proxies=proxies)
+        response = req_session.get('https://std.samr.gov.cn/search/stdPage', params=params)
         if response.status_code == 200:
             tree = etree.HTML(response.text)
             # 使用XPath表达式选择所有class为s-title的表格
             tables = tree.xpath('//div[@class="post-head"]/table')
+            if not tables:
+                file_names[old_keywords] = "未查询到"
             # 遍历每个表格
             for table in tables:
                 rows = table.xpath('.//tr')
@@ -64,24 +80,29 @@ def query_state(keywords: str):
                     tds = i.xpath('.//td')
                     if len(tds) == 2:
                         standard_numbe = tds[0].xpath('./a//text()')
-                        standard_numbe = "".join(standard_numbe).replace("\xa0", "").replace(" ", "")
-                        keywords_strip = keywords.strip().replace(" ", "")
+                        standard_numbe = "".join(standard_numbe).replace("\xa0", "").replace(" ", "").replace("/", "")
+                        keywords_strip = keywords.replace(" ", "").replace("/", "")
                         state = tds[1].xpath('./span/text()')
                         if keywords_strip in standard_numbe:
-                            file_names[keywords] = "|".join(state)
+                            file_names[old_keywords] = "|".join(state)
                             print(keywords, state)
                     else:
+                        file_names[old_keywords] = "未查询到"
                         print("未查询到结果")
         else:
-            print(keywords[0], "    查询失败")
+            print(keywords, "    查询失败")
     except Exception as e:
         print(e)
 
 
-# file_names = get_file_names()
-file_names = {"GB/T 40373-2021": "", "GB 8921-2011": "", "GB 6763-2000": ""}
+file_names = get_file_names()
+# file_names = {"GB/T 40373-2021": "", "GB 8921-2011": "", "GB 6763-2000": ""}
 for i in file_names.items():
     query_state(i[0])
+df = pd.DataFrame(list(file_names.items()), columns=['标准编号', '状态'])
 
+# 保存数据框为 Excel 文件
+excel_file = 'special_characters.xlsx'
+df.to_excel(excel_file, index=False, engine='openpyxl')
 # 等待用户输入以结束程序
-input("按Enter键以结束程序...")
+input("结果保存成功按Enter键以结束程序...")

@@ -75,8 +75,13 @@ def translate_folder_contents(folder):
             if is_english(subfolder[0]):
                 # 如果文件夹名称为英文，进行翻译
                 translated_name = translate_function(subfolder)
+                if not translated_name:
+                    continue
                 new_subfolder = os.path.join(root, translated_name)
+                if os.path.exists(new_subfolder):
+                    continue
                 os.rename(os.path.join(root, subfolder), new_subfolder)
+                time.sleep(1)
 
         # 遍历当前文件夹的文件名称
         for filename in files:
@@ -85,8 +90,13 @@ def translate_folder_contents(folder):
                 # 如果文件名称为英文，进行翻译
                 x = filename.split(".")
                 translated_name = translate_function(x[0])
-                new_filename = os.path.join(root, translated_name)
-                os.rename(os.path.join(root, filename), f"{new_filename}.{x[1]}")
+                if not translated_name:
+                    continue
+                new_filename = os.path.join(root, translated_name) + "." + x[1]
+                if os.path.exists(new_filename):
+                    continue
+                os.rename(os.path.join(root, filename), new_filename)
+                time.sleep(1)
 
 # 使用示例：传入要遍历的根文件夹
 root_folder = './books'

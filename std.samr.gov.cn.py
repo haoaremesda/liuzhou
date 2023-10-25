@@ -1,9 +1,16 @@
+import base64
 import re
+import threading
+import time
 
 import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from lxml import etree
 import os
 import pandas as pd
+
+
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 req_session = requests.session()
@@ -27,12 +34,12 @@ req_session.headers = headers
 # 定义一个函数，用于提取行业标准编码
 def extract_standard_code(text):
     # 使用正则表达式匹配带斜杠的标准编码模式
-    pattern = r'[A-Z]+[/A-Z\s\d-]+'
+    pattern = r'^[A-Z\d\s∕.\-╱]+'
     match = re.search(pattern, text)
     if match:
-        return match.group()
+        return match.group().strip()  # 使用strip()去除可能的前后空格
     else:
-        return None
+        return ""
 
 
 def get_file_names() -> dict:
@@ -41,27 +48,21 @@ def get_file_names() -> dict:
     file_names_without_extension = {}
     # 检查输入路径是否存在
     if os.path.exists(directory) and os.path.isdir(directory):
-        # 使用os库列出目录下的所有文件和子目录
-        entries = os.listdir(directory)
-        # 仅获取文件名并过滤掉子目录
-        for entry in entries:
-            entry_path = os.path.join(directory, entry)
-            if os.path.isfile(entry_path):  # 仅包括文件，不包括子目录
-                file_name = os.path.splitext(entry)[0]  # 获取文件名（不包括后缀）
-                file_names_without_extension[file_name] = ""
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if file == "LIST.TXT" or file == "新建文本文档.bat":
+                    continue
+                file_names_without_extension[file.replace("+", " ")] = ""
         print(f"该目录下有文件数量 {len(file_names_without_extension)}")
     else:
         print("指定的目录路径不存在或不是目录。")
     return file_names_without_extension
 
 
-def query_state(old_keywords: str):
-    global file_names
-    keywords = extract_standard_code(old_keywords).strip()
-    if not keywords:
-        return False
+def query_samr_gov_state(old_keywords: str):
+    old_keywords = old_keywords
     params = {
-        'q': keywords,
+        'q': old_keywords,
         'tid': '',
     }
     try:
@@ -71,7 +72,7 @@ def query_state(old_keywords: str):
             # 使用XPath表达式选择所有class为s-title的表格
             tables = tree.xpath('//div[@class="post-head"]/table')
             if not tables:
-                file_names[old_keywords] = "未查询到"
+                return "未查询到"
             # 遍历每个表格
             for table in tables:
                 rows = table.xpath('.//tr')
@@ -80,29 +81,125 @@ def query_state(old_keywords: str):
                     tds = i.xpath('.//td')
                     if len(tds) == 2:
                         standard_numbe = tds[0].xpath('./a//text()')
-                        standard_numbe = "".join(standard_numbe).replace("\xa0", "").replace(" ", "").replace("/", "")
-                        keywords_strip = keywords.replace(" ", "").replace("/", "")
+                        standard_numbe = "".join(standard_numbe).replace("\xa0", "").replace(" ", "").replace("/", "").replace("∕", "")
+                        keywords_strip = old_keywords.replace("/", "").replace(" ", "")
                         state = tds[1].xpath('./span/text()')
                         if keywords_strip in standard_numbe:
-                            file_names[old_keywords] = "|".join(state)
-                            print(keywords, state)
-                    else:
-                        file_names[old_keywords] = "未查询到"
-                        print("未查询到结果")
+                            return "|".join(state)
         else:
-            print(keywords, "    查询失败")
+            print(old_keywords, "    查询失败")
     except Exception as e:
         print(e)
+    return "未查询到"
 
 
-file_names = get_file_names()
-# file_names = {"GB/T 40373-2021": "", "GB 8921-2011": "", "GB 6763-2000": ""}
-for i in file_names.items():
-    query_state(i[0])
-df = pd.DataFrame(list(file_names.items()), columns=['标准编号', '状态'])
+def query_csres_state(keywords):
+    url = f"http://www.csres.com/s.jsp?keyword={keywords}&submit12=%B1%EA%D7%BC%CB%D1%CB%F7&xx=on&wss=on&zf=on&fz=on&pageSize=25&pageNum=1&SortIndex=1&WayIndex=0&nowUrl="
+    response = requests.get(url=url, headers=headers, verify=False)
+    if response.status_code == 200:
+        tree = etree.HTML(response.text)
+        # 使用XPath表达式选择所有class为s-title的表格
+        bzh_list = tree.xpath("//thead[@class='th1']//tr/td[1]/a/font/text()")
+        state_list = tree.xpath("//thead[@class='th1']//tr/td[5]/font/text()")
+        for bzh, state in zip(bzh_list, state_list):
+            bzh = bzh.strip().replace(" ", "").replace("/", "").replace("∕", "")
+            keywords = keywords.replace(" ", "").replace("/", "")
+            if bzh == keywords or bzh in keywords:
+                return state
+    else:
+        print("query_weboos_state", response.status_code)
+    return "未查询到"
 
-# 保存数据框为 Excel 文件
-excel_file = 'special_characters.xlsx'
-df.to_excel(excel_file, index=False, engine='openpyxl')
-# 等待用户输入以结束程序
-input("结果保存成功按Enter键以结束程序...")
+
+def query_zjamr_zj_state(keywords):
+    data = base64.b64encode(f"stdNo={keywords}".encode()).decode()
+    url = f"https://bz.zjamr.zj.gov.cn/public/std/list/ALL/1.html?data={data}"
+    response = requests.get(url=url, headers=headers, verify=False)
+    if response.status_code == 200:
+        tree = etree.HTML(response.text)
+        # 使用XPath表达式选择所有class为s-title的表格
+        bzh_list = tree.xpath("//span[@class='list-gb']")
+        state_list = tree.xpath("//span[@class='liat-time']")
+        for bzh, state in zip(bzh_list, state_list):
+            bzh = bzh.text.strip().replace(" ", "").replace("/", "").replace("∕", "")
+            keywords = keywords.replace(" ", "").replace("/", "")
+            if bzh == keywords or bzh in keywords:
+                return state.text.strip()
+    else:
+        print("query_weboos_state", response.status_code)
+    return "未查询到"
+
+
+def query_weboos_state(keywords):
+    global VIEWSTATE, EVENTVALIDATION
+    session = requests.session()
+    session.headers = headers
+    session.headers["Content-Type"] = "application/x-www-form-urlencoded"
+    session.headers["Referer"] = "http://www.weboos.com/"
+    if not VIEWSTATE:
+        start_url = "http://www.weboos.com/"
+        start_resp = session.get(url=start_url, headers=headers, verify=False)
+        if start_resp.status_code == 200:
+            VIEWSTATE = re.findall(r'__VIEWSTATE" value="(.*?)"', start_resp.text)[0]
+            EVENTVALIDATION = re.findall(r'__EVENTVALIDATION" value="(.*?)"', start_resp.text)[0]
+    url = "http://www.weboos.com/index.aspx"
+    data = {"__VIEWSTATE": VIEWSTATE, "__EVENTVALIDATION": EVENTVALIDATION, "txtQuery": keywords, "btnSearch": "标准搜索", "__EVENTTARGET": "", "__EVENTARGUMENT": ""}
+    resp = session.post(url=url, data=data, verify=False)
+    if resp.status_code == 200:
+        tree = etree.HTML(resp.text)
+        # 使用XPath表达式选择所有class为s-title的表格
+        bzh_list = tree.xpath("//table[@id='dgList']//tr[2]/td[1]/a")
+        state_list = tree.xpath("//table[@id='dgList']//tr[2]/td[4]")
+        for bzh, state in zip(bzh_list, state_list):
+            bzh = bzh.text.strip().replace(" ", "").replace("/", "").replace("∕", "")
+            keywords = keywords.replace(" ", "").replace("/", "")
+            if bzh == keywords or bzh in keywords:
+                return state.text.strip()
+    else:
+        print("query_weboos_state", resp.status_code)
+    return "未查询到"
+
+
+if __name__ == '__main__':
+    VIEWSTATE, EVENTVALIDATION = "", ""
+    file_names = get_file_names()
+    start_time = time.time()
+    states = []
+    # file_names = {"GBZ 115-2002 X射线衍射仪和荧光分析仪卫生防护标准.pdf": "", "GB∕T 11743-2013 土壤中放射性核素的γ能谱分析方法.pdf": "", "GB∕T 16148-2009 放射性核素摄入量及内照射剂量估算规范.pdf": ""}
+
+    for k in list(file_names.keys()):
+        keyword = k
+        results = []
+        keyword = extract_standard_code(keyword).strip()
+        if not keyword:
+            continue
+        t = []
+        threads = []
+        keyword = keyword.replace("∕", "/").strip()
+        for fun in [query_samr_gov_state, query_zjamr_zj_state, query_weboos_state]:
+            thread = threading.Thread(target=lambda: results.append(fun(keyword)))
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()  # 等待当前关键字的四个检索函数执行完毕
+        print(results)
+        if "废止" in results or "作废" in results:
+            file_names[k] = "废止"
+        elif "现行" in results or "实行中" in results:
+            file_names[k] = "现行"
+        else:
+            file_names[k] = results[0] if results else "未查询到"
+
+    df = pd.DataFrame(list(file_names.items()), columns=['标准编号', '状态'])
+    # excel_file = input("请输入指定文件名保存结果: ")
+    # # 保存数据框为 Excel 文件
+    # if excel_file:
+    #     excel_file += '.xlsx'
+    # else:
+    #     excel_file = 'special_characters.xlsx'
+    excel_file = '标准查询.xlsx'
+    df.to_excel(excel_file, index=False, engine='openpyxl')
+    end_time = time.time()
+    print(end_time - start_time)
+    # 等待用户输入以结束程序
+    # input("结果保存成功按Enter键以结束程序...")

@@ -8,7 +8,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from lxml import etree
 import os
 import pandas as pd
-
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -42,18 +42,18 @@ def extract_standard_code(text):
         return ""
 
 
-def get_file_names() -> dict:
+def get_file_names() -> list:
     # 获取用户输入的目录路径
     directory = input("请输入目录路径: ")
-    file_names_without_extension = {}
+    file_names_without_extension = []
     # 检查输入路径是否存在
     if os.path.exists(directory) and os.path.isdir(directory):
         for root, dirs, files in os.walk(directory):
             for file in files:
                 if file == "LIST.TXT" or file == "新建文本文档.bat":
                     continue
-                file_names_without_extension[file.replace("+", " ")] = ""
-        print(f"该目录下有文件数量 {len(file_names_without_extension)}")
+                file_names_without_extension.append(file.replace("+", " "))
+        # print(f"该目录下有文件数量 {len(file_names_without_extension)}")
     else:
         print("指定的目录路径不存在或不是目录。")
     return file_names_without_extension
@@ -66,13 +66,13 @@ def query_samr_gov_state(old_keywords: str):
         'tid': '',
     }
     try:
-        response = req_session.get('https://std.samr.gov.cn/search/stdPage', params=params)
+        response = req_session.get('https://std.samr.gov.cn/search/stdPage', params=params, verify=False)
         if response.status_code == 200:
             tree = etree.HTML(response.text)
             # 使用XPath表达式选择所有class为s-title的表格
             tables = tree.xpath('//div[@class="post-head"]/table')
             if not tables:
-                return "未查询到"
+                return f"未查询到"
             # 遍历每个表格
             for table in tables:
                 rows = table.xpath('.//tr')
@@ -90,7 +90,7 @@ def query_samr_gov_state(old_keywords: str):
             print(old_keywords, "    查询失败")
     except Exception as e:
         print(e)
-    return "未查询到"
+    return f"未查询到"
 
 
 def query_csres_state(keywords):
@@ -127,7 +127,7 @@ def query_zjamr_zj_state(keywords):
                 return state.text.strip()
     else:
         print("query_weboos_state", response.status_code)
-    return "未查询到"
+    return f"未查询到"
 
 
 def query_weboos_state(keywords):
@@ -157,7 +157,7 @@ def query_weboos_state(keywords):
                 return state.text.strip()
     else:
         print("query_weboos_state", resp.status_code)
-    return "未查询到"
+    return f"未查询到"
 
 
 if __name__ == '__main__':
@@ -165,32 +165,41 @@ if __name__ == '__main__':
     file_names = get_file_names()
     start_time = time.time()
     states = []
+    datas = []
     # file_names = {"GBZ 115-2002 X射线衍射仪和荧光分析仪卫生防护标准.pdf": "", "GB∕T 11743-2013 土壤中放射性核素的γ能谱分析方法.pdf": "", "GB∕T 16148-2009 放射性核素摄入量及内照射剂量估算规范.pdf": ""}
-
-    for k in list(file_names.keys()):
+    for k in file_names:
         keyword = k
-        results = []
         keyword = extract_standard_code(keyword).strip()
         if not keyword:
             continue
-        t = []
+        results = [k]
         threads = []
         keyword = keyword.replace("∕", "/").strip()
-        for fun in [query_samr_gov_state, query_zjamr_zj_state, query_weboos_state]:
-            thread = threading.Thread(target=lambda: results.append(fun(keyword)))
-            thread.start()
-            threads.append(thread)
-        for thread in threads:
-            thread.join()  # 等待当前关键字的四个检索函数执行完毕
-        print(results)
-        if "废止" in results or "作废" in results:
-            file_names[k] = "废止"
-        elif "现行" in results or "实行中" in results:
-            file_names[k] = "现行"
-        else:
-            file_names[k] = results[0] if results else "未查询到"
+        # for fun in [query_samr_gov_state, query_zjamr_zj_state, query_weboos_state]:
+        #     thread = threading.Thread(target=lambda: results.append(fun(keyword)))
+        #     thread.start()
+        #     threads.append(thread)
+        # for thread in threads:
+        #     thread.join()
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # 同时启动三个函数
+            futures = [executor.submit(query_samr_gov_state, keyword),
+                       executor.submit(query_zjamr_zj_state, keyword),
+                       executor.submit(query_weboos_state, keyword)]
 
-    df = pd.DataFrame(list(file_names.items()), columns=['标准编号', '状态'])
+            for future in futures:
+                result = future.result()
+                results.append(result)
+        if "废止" in results or "作废" in results:
+            results.append("废止")
+        elif "现行" in results or "实行中" in results:
+            results.append("现行")
+        else:
+            results.append("未查询到")
+        print(results)
+        states.append(results)
+
+    df = pd.DataFrame(states, columns=['法规名称', 'https://std.samr.gov.cn/查询结果', 'https://bz.zjamr.zj.gov.cn/查询结果', 'http://www.weboos.com/查询结果', '标准状态'])
     # excel_file = input("请输入指定文件名保存结果: ")
     # # 保存数据框为 Excel 文件
     # if excel_file:

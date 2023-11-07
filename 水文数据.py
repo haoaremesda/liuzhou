@@ -126,7 +126,7 @@ def get_sczwfw_data():
                                     total = page_size
                                     break
                                 station_datas.append([item[s] if s in item else '' for s in columns])
-                            print(i, page)
+                            print(i, f"第 {page} 页爬取完成")
                             page += 1
                         else:
                             print(d)
@@ -200,7 +200,7 @@ if __name__ == '__main__':
     # 创建调度器
     scheduler = BlockingScheduler()
     # 添加定时任务，每天下午两点执行一次
-    scheduler.add_job(run, 'cron', hour=16, minute=53)
+    scheduler.add_job(run, 'cron', hour=14, minute=00)
     try:
         # 开始调度器
         scheduler.start()

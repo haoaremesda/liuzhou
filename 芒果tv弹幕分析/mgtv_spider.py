@@ -80,7 +80,7 @@ if __name__ == '__main__':
     # 表头
     item_header = ["isvip", "clip_id", "img", "playcnt", "t1", "t2", "t3", "time", "video_id", "url"]
     end_header = ["content", "send_time", "type", "uid", "v2_up_count"]
-    header = ["节目名称", "是否需要VIP", "节目ID", "每期背景图", "每期播放量", "每期标题", "发布日期", "每期详细标题", "每期时常", "期ID", "期URL",
+    header = ["节目名称", "是否需要VIP", "节目ID", "每期背景图", "每期播放量", "每期标题", "发布日期", "每期详细标题", "每期时长", "期ID", "期URL",
               "弹幕内容", "弹幕发送时间", "类型", "用户ID", "弹幕点赞量"]
     months = ["202207", "202208"]
     for i in months:

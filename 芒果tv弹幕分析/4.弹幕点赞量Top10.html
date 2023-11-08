@@ -7,11 +7,11 @@
 
 </head>
 <body >
-    <div id="7450ec3679ae46cebda23aaabcb8698c" class="chart-container" style="width:900px; height:500px; "></div>
+    <div id="f1a7b32183d74afe9c7bdf523d9f98a2" class="chart-container" style="width:900px; height:500px; "></div>
     <script>
-        var chart_7450ec3679ae46cebda23aaabcb8698c = echarts.init(
-            document.getElementById('7450ec3679ae46cebda23aaabcb8698c'), 'white', {renderer: 'canvas'});
-        var option_7450ec3679ae46cebda23aaabcb8698c = {
+        var chart_f1a7b32183d74afe9c7bdf523d9f98a2 = echarts.init(
+            document.getElementById('f1a7b32183d74afe9c7bdf523d9f98a2'), 'white', {renderer: 'canvas'});
+        var option_f1a7b32183d74afe9c7bdf523d9f98a2 = {
     "animation": true,
     "animationThreshold": 2000,
     "animationDuration": 1000,
@@ -38,18 +38,20 @@
         {
             "type": "bar",
             "name": "\u5f39\u5e55\u70b9\u8d5e\u91cf",
+            "xAxisIndex": 0,
+            "yAxisIndex": 0,
             "legendHoverLink": true,
             "data": [
-                14659,
-                11575,
-                11437,
-                10275,
-                10147,
-                10098,
-                9895,
-                9771,
-                9197,
-                9076
+                14669,
+                11586,
+                11444,
+                10284,
+                10159,
+                10110,
+                9902,
+                9772,
+                9205,
+                9077
             ],
             "realtimeSort": false,
             "showBackground": false,
@@ -206,9 +208,85 @@
             "textVerticalAlign": "auto",
             "triggerEvent": false
         }
+    ],
+    "toolbox": {
+        "show": true,
+        "orient": "horizontal",
+        "itemSize": 15,
+        "itemGap": 10,
+        "left": "80%",
+        "feature": {
+            "saveAsImage": {
+                "type": "png",
+                "backgroundColor": "auto",
+                "connectedBackgroundColor": "#fff",
+                "show": true,
+                "title": "\u4fdd\u5b58\u4e3a\u56fe\u7247",
+                "pixelRatio": 1
+            },
+            "restore": {
+                "show": true,
+                "title": "\u8fd8\u539f"
+            },
+            "dataView": {
+                "show": true,
+                "title": "\u6570\u636e\u89c6\u56fe",
+                "readOnly": false,
+                "lang": [
+                    "\u6570\u636e\u89c6\u56fe",
+                    "\u5173\u95ed",
+                    "\u5237\u65b0"
+                ],
+                "backgroundColor": "#fff",
+                "textareaColor": "#fff",
+                "textareaBorderColor": "#333",
+                "textColor": "#000",
+                "buttonColor": "#c23531",
+                "buttonTextColor": "#fff"
+            },
+            "dataZoom": {
+                "show": true,
+                "title": {
+                    "zoom": "\u533a\u57df\u7f29\u653e",
+                    "back": "\u533a\u57df\u7f29\u653e\u8fd8\u539f"
+                },
+                "icon": {},
+                "filterMode": "filter"
+            },
+            "magicType": {
+                "show": true,
+                "type": [
+                    "line",
+                    "bar",
+                    "stack",
+                    "tiled"
+                ],
+                "title": {
+                    "line": "\u5207\u6362\u4e3a\u6298\u7ebf\u56fe",
+                    "bar": "\u5207\u6362\u4e3a\u67f1\u72b6\u56fe",
+                    "stack": "\u5207\u6362\u4e3a\u5806\u53e0",
+                    "tiled": "\u5207\u6362\u4e3a\u5e73\u94fa"
+                },
+                "icon": {}
+            }
+        }
+    },
+    "grid": [
+        {
+            "show": false,
+            "zlevel": 0,
+            "z": 2,
+            "left": "20%",
+            "containLabel": false,
+            "backgroundColor": "transparent",
+            "borderColor": "#ccc",
+            "borderWidth": 1,
+            "shadowOffsetX": 0,
+            "shadowOffsetY": 0
+        }
     ]
 };
-        chart_7450ec3679ae46cebda23aaabcb8698c.setOption(option_7450ec3679ae46cebda23aaabcb8698c);
+        chart_f1a7b32183d74afe9c7bdf523d9f98a2.setOption(option_f1a7b32183d74afe9c7bdf523d9f98a2);
     </script>
 </body>
 </html>

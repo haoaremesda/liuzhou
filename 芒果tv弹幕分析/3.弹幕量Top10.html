@@ -7,11 +7,11 @@
 
 </head>
 <body >
-    <div id="3d6e21cc9a63438aacdd975124fb9339" class="chart-container" style="width:900px; height:500px; "></div>
+    <div id="383b4e008bd144da83071fb1cf250a90" class="chart-container" style="width:900px; height:500px; "></div>
     <script>
-        var chart_3d6e21cc9a63438aacdd975124fb9339 = echarts.init(
-            document.getElementById('3d6e21cc9a63438aacdd975124fb9339'), 'white', {renderer: 'canvas'});
-        var option_3d6e21cc9a63438aacdd975124fb9339 = {
+        var chart_383b4e008bd144da83071fb1cf250a90 = echarts.init(
+            document.getElementById('383b4e008bd144da83071fb1cf250a90'), 'white', {renderer: 'canvas'});
+        var option_383b4e008bd144da83071fb1cf250a90 = {
     "animation": true,
     "animationThreshold": 2000,
     "animationDuration": 1000,
@@ -38,13 +38,15 @@
         {
             "type": "bar",
             "name": "\u6570\u91cf",
+            "xAxisIndex": 0,
+            "yAxisIndex": 0,
             "legendHoverLink": true,
             "data": [
                 906,
                 332,
                 311,
                 296,
-                294,
+                293,
                 258,
                 240,
                 197,
@@ -162,7 +164,7 @@
             "gridIndex": 0,
             "axisLabel": {
                 "show": true,
-                "rotate": 0,
+                "rotate": 20,
                 "margin": 8,
                 "interval": 0
             },
@@ -206,9 +208,85 @@
             "textVerticalAlign": "auto",
             "triggerEvent": false
         }
+    ],
+    "toolbox": {
+        "show": true,
+        "orient": "horizontal",
+        "itemSize": 15,
+        "itemGap": 10,
+        "left": "80%",
+        "feature": {
+            "saveAsImage": {
+                "type": "png",
+                "backgroundColor": "auto",
+                "connectedBackgroundColor": "#fff",
+                "show": true,
+                "title": "\u4fdd\u5b58\u4e3a\u56fe\u7247",
+                "pixelRatio": 1
+            },
+            "restore": {
+                "show": true,
+                "title": "\u8fd8\u539f"
+            },
+            "dataView": {
+                "show": true,
+                "title": "\u6570\u636e\u89c6\u56fe",
+                "readOnly": false,
+                "lang": [
+                    "\u6570\u636e\u89c6\u56fe",
+                    "\u5173\u95ed",
+                    "\u5237\u65b0"
+                ],
+                "backgroundColor": "#fff",
+                "textareaColor": "#fff",
+                "textareaBorderColor": "#333",
+                "textColor": "#000",
+                "buttonColor": "#c23531",
+                "buttonTextColor": "#fff"
+            },
+            "dataZoom": {
+                "show": true,
+                "title": {
+                    "zoom": "\u533a\u57df\u7f29\u653e",
+                    "back": "\u533a\u57df\u7f29\u653e\u8fd8\u539f"
+                },
+                "icon": {},
+                "filterMode": "filter"
+            },
+            "magicType": {
+                "show": true,
+                "type": [
+                    "line",
+                    "bar",
+                    "stack",
+                    "tiled"
+                ],
+                "title": {
+                    "line": "\u5207\u6362\u4e3a\u6298\u7ebf\u56fe",
+                    "bar": "\u5207\u6362\u4e3a\u67f1\u72b6\u56fe",
+                    "stack": "\u5207\u6362\u4e3a\u5806\u53e0",
+                    "tiled": "\u5207\u6362\u4e3a\u5e73\u94fa"
+                },
+                "icon": {}
+            }
+        }
+    },
+    "grid": [
+        {
+            "show": false,
+            "zlevel": 0,
+            "z": 2,
+            "left": "30%",
+            "containLabel": false,
+            "backgroundColor": "transparent",
+            "borderColor": "#ccc",
+            "borderWidth": 1,
+            "shadowOffsetX": 0,
+            "shadowOffsetY": 0
+        }
     ]
 };
-        chart_3d6e21cc9a63438aacdd975124fb9339.setOption(option_3d6e21cc9a63438aacdd975124fb9339);
+        chart_383b4e008bd144da83071fb1cf250a90.setOption(option_383b4e008bd144da83071fb1cf250a90);
     </script>
 </body>
 </html>

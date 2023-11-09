@@ -103,7 +103,7 @@ if __name__ == '__main__':
                     d.append(item["type"])
                     d.append(item["uid"])
                     d.append(item["v2_up_count"] if "v2_up_count" in item else 0)
-                    d.append(f"{t}_{t+1}")
+                    d.append(f"{t}_{t+1} ")
                     data_list.append(d)
                 if not data_list:
                     continue

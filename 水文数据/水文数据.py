@@ -189,7 +189,7 @@ def run():
 
 if __name__ == '__main__':
     IsRun = False
-    sczwfw_summary_file_path = './汇总数据'
+    sczwfw_summary_file_path = '汇总数据'
     if not os.path.exists(sczwfw_summary_file_path):
         os.makedirs(sczwfw_summary_file_path)
     sczwfw_datas_file_path = f'{sczwfw_summary_file_path}/任务三 备份数据.csv'

@@ -17,14 +17,14 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 headers = {
     'Accept': 'application/json, text/javascript, */*; q=0.01',
-    'Referer': 'https://geotech.moeacgs.gov.tw/imoeagis/js/WebWorker/GetProjectList.js?v=0331',
+    'Referer': 'https://geotech.gsmma.gov.tw/imoeagis/js/WebWorker/GetProjectList.js?v=0331',
     'X-Requested-With': 'XMLHttpRequest',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
     'Content-Type': 'application/json; charset=UTF-8',
 }
 
 # 设置代理
-proxies = {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
+proxies = {"http": "http://127.0.0.1:4780", "https": "http://127.0.0.1:4780"}
 
 projects_num = {}
 
@@ -42,7 +42,7 @@ def init_session(is_set_cookie=False):
     req_session = requests.session()
     req_session.headers = headers
     if is_set_cookie:
-        url = "https://geotech.moeacgs.gov.tw/imoeagis/Home/Map"
+        url = "https://geotech.gsmma.gov.tw/Imoeagis/Home/Map"
         get_content(req_session=req_session, url=url, result_null=True, send_type="GET")
     return req_session
 
@@ -67,7 +67,7 @@ def get_content(req_session: Session, url: str, data=None, send_type: str = "POS
 
 
 def get_drill_projects(session) -> list:
-    url = 'https://geotech.moeacgs.gov.tw/imoeagis/api/DrillProjectsJson/GetDrillProjects'
+    url = 'https://geotech.gsmma.gov.tw/imoeagis/api/DrillProjectsJson/GetDrillProjects'
     drill_data = {"sType": "search", "sWKT": "", "sKeyWord": "", "sPlan": "", "exename": "", "orgname": "",
                   "userauth": "", "status": None, "pagecnt": "1"}
     projects = get_content(req_session=session, url=url, data=drill_data, send_type="POST")
@@ -75,19 +75,19 @@ def get_drill_projects(session) -> list:
 
 
 def get_dr_coords_json(session, project_key_id: int) -> list:
-    url = f'https://geotech.moeacgs.gov.tw/imoeagis/api/DrCoordsJson/{project_key_id}'
+    url = f'https://geotech.gsmma.gov.tw/imoeagis/api/DrCoordsJson/{project_key_id}'
     coords_json = get_content(req_session=session, url=url, send_type="GET")
     return coords_json
 
 
 def get_drill_image(session, key_id: int) -> list:
-    url = 'https://geotech.moeacgs.gov.tw/imoeagis/api/DrillImageJson'
+    url = 'https://geotech.gsmma.gov.tw/imoeagis/api/DrillImageJson'
     drill_image = get_content(req_session=session, url=url, data=key_id)
     return drill_image
 
 
 def get_geo_report(session, mode: str, project_key_id: int, key_id: int) -> list:
-    url = 'https://geotech.moeacgs.gov.tw/imoeagis/api/GeoReport'
+    url = 'https://geotech.gsmma.gov.tw/imoeagis/api/GeoReport'
     geo_report = {"Mode": mode, "ProjectKeyId": project_key_id, "KeyId": key_id}
     coords_json = get_content(req_session=session, url=url, data=geo_report)
     return coords_json
@@ -191,6 +191,7 @@ def spider_coord(coord: dict, path: str, req_session: Session) -> list:
             else:
                 img_file = f"{coord_path}/{coord['holePointNo']}_岩心照片_{num}.jpg".strip()
                 save_drill_img(info, img_file)
+            num += 1
     print(coord["keyid"])
     return spider_data
 
@@ -228,7 +229,7 @@ def run():
     # 创建标题行数据
     header = ["鑽孔編號", "鑽孔工程名稱", "計畫編號", "鑽孔地點", "鑽孔地表高程", "座標系統", "孔口X座標", "孔口Y座標",
               "鑽探起始日期", "鑽探完成日期", "鑽機機型", "鑽孔總總深度", "鑽探公司"]
-    max_threads = 10
+    max_threads = 1
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider, value) for value in drill_projects]
         concurrent.futures.wait(futures)

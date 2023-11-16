@@ -123,10 +123,15 @@ def save_table(html_string, excel_file):
     for table in tables:
         # 获取表头中的标题文本
         headers = [element.get_text(strip=True) for element in table.select('thead th, thead td')]
-        data_rows.append(headers)
+        headers_size = len(headers)
         # 获取数据单元格文本
         data = [element.get_text(strip=True) for element in table.select('tbody th, tbody td')]
-        data_rows.append(data)
+        data_size = len(data)
+        x = 0
+        while data_size > x:
+            data_rows.append(headers)
+            data_rows.append(data[x:x + headers_size])
+            x += headers_size
     df = pd.DataFrame(data_rows)
     # 将DataFrame保存为Excel文件
     df.to_excel(excel_file, index=False, header=False)
@@ -182,6 +187,8 @@ def spider_coord(coord: dict, path: str) -> list:
         for info in mode_data:
             if mode == "BaseData":
                 info_file_path = f"{coord_path}/基本信息_{num}.txt"
+                # if os.path.exists(info_file_path):
+                #     continue
                 coord_info = save_info(info, info_file_path)
                 if coord_info:
                     spider_data = coord_info
@@ -204,8 +211,8 @@ def spider(dril_obj: dict):
     global folder
     # dril_obj['projName'] = remove_special_characters(dril_obj['projName']).replace("\r", "").replace("\n", "").strip()
     path = f"{folder}/{dril_obj['projName']}"
-    if os.path.exists(path):
-        return
+    # if os.path.exists(path):
+    #     return
     print(dril_obj['projName'], "---正在开始")
     make_dirs(path)
     coords_list = get_dr_coords_json(dril_obj["keyid"])
@@ -227,16 +234,16 @@ def run():
             continue
         i['projName'] = remove_special_characters(i['projName']).strip().replace("\r", "").replace("\n", "")
         path = f"{folder}/{remove_special_characters(i['projName'])}"
-        if os.path.exists(path):
-            continue
+        # if os.path.exists(path):
+        #     continue
         drill_projects2.append(i)
     print("需要爬取的项目数量：", len(drill_projects2))
     # 创建标题行数据
     datas = [["鑽孔編號", "鑽孔工程名稱", "計畫編號", "鑽孔地點", "鑽孔地表高程", "座標系統", "孔口X座標", "孔口Y座標",
               "鑽探起始日期", "鑽探完成日期", "鑽機機型", "鑽孔總總深度", "鑽探公司"]]
-    max_threads = 5
+    max_threads = 3
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-        futures = [executor.submit(spider, value) for value in drill_projects2[:10]]
+        futures = [executor.submit(spider, value) for value in drill_projects2]
         concurrent.futures.wait(futures)
     items = os.listdir(folder)
     subfolders = [item for item in items if os.path.isdir(os.path.join(folder, item))]

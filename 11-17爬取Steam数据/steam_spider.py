@@ -9,15 +9,19 @@ import concurrent.futures
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+req_session = requests.session()
+
 heads = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"}
+
+req_session.headers = heads
 
 proxies = {"http": "http://127.0.0.1:4780", "https": "http://127.0.0.1:4780"}
 
 
 def get_steam_scout(app_id, language: str):
     url = f"https://www.togeproductions.com/SteamScout/a.php?appID={app_id}&language={language}&purchase_type=all"
-    resp = requests.get(url=url, headers=heads, proxies=proxies)
+    resp = req_session.get(url=url)
     if resp.status_code == 200:
         json_data = resp.json()
         if json_data["query_summary"]:
@@ -67,14 +71,20 @@ if __name__ == '__main__':
     column_data = df[column_name][1:].tolist()
     keys = list(languages.keys())
     for app_id in column_data[:5]:
+        req_session.headers["Referer"] = f"https://www.togeproductions.com/SteamScout/steamAPI.php?appID={app_id}"
         all_data = {}
+        portions = []
         for key in keys:
             d = get_steam_scout(app_id, key)
             if key == "all":
                 all_data = d
                 continue
-            portion = round(all_data["total_reviews"]/d["total_reviews"]*100, 2)
-        print(app_id)
+            if d["total_reviews"] == 0:
+                portion = "0.00%"
+            else:
+                portion = round(d["total_reviews"]/all_data["total_reviews"]*100, 2)
+                portion = f"{portion}%"
+            portions.append({key: portion})
 
     # 打印列数据
     print(column_data)

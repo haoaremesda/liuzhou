@@ -38,6 +38,12 @@ def get_blog_links(free_resource_url: str):
         xpath_str = '//div[@class="sqs-html-content"]/h3//a/@href'
     elif "supplemental-essays" in free_resource_url:
         xpath_str = '//div[@class="sqs-block-content"]/li//a/@href | //div[@class="sqs-html-content"]/h2//a/@href'
+    elif "uc-prompts-guide" in free_resource_url:
+        xpath_str = '//table[@id="guide"]//a/@href'
+    elif "international-hub" in free_resource_url:
+        xpath_str = '//figcaption//p/a/@href'
+    elif "college-admissions-blog" in free_resource_url:
+        xpath_str = '//a[@class="summary-read-more-link"] | //div[@class="sqs-html-content"]/h2//a/@href'
     else:
         xpath_str = '//ul[@data-rte-list="default"]/li//a/@href'
     blog_links_2 = []
@@ -83,7 +89,8 @@ if __name__ == '__main__':
     all_links = []
     if not os.path.exists(folder):
         os.makedirs(folder)
-    free_resources_links = get_free_resources(url)[:4]
+    free_resources_links = get_free_resources(url)
+    free_resources_links.append("https://www.collegeessayguy.com/international-hub")
     for i in free_resources_links:
         blog_links = get_blog_links(i)
         all_links.extend(blog_links)

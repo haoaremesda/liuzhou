@@ -6,16 +6,17 @@ import concurrent.futures
 import pandas as pd
 from datetime import datetime, timedelta
 from retrying import retry
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+
+# 禁用安全请求警告
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 headers = {
     'Accept': '*/*',
     'Accept-Language': 'zh-CN,zh;q=0.9',
     'Cache-Control': 'no-cache',
-    # 'Connection': 'keep-alive',
-    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-    'Origin': 'http://www.cninfo.com.cn',
+    'Connection': 'keep-alive',
     'Pragma': 'no-cache',
-    'Referer': 'http://www.cninfo.com.cn/new/commonUrl/pageOfSearch?url=disclosure/list/search&lastPage=index',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
     'X-Requested-With': 'XMLHttpRequest',
 }
@@ -27,31 +28,18 @@ def remove_special_characters(strings):
 
 
 @retry(wait_fixed=5000)
-def query_announcements(page, pageSize, seDate) -> tuple:
+def query_feeds() -> tuple:
     num = 0
     ks = []
-    data = {
-        'pageNum': page,
-        'pageSize': pageSize,
-        'column': 'szse',
-        'tabName': 'relation',
-        'plate': '',
-        'stock': '',
-        'searchkey': '',
-        'secid': '',
-        'category': '',
-        'trade': '',
-        'seDate': seDate,
-        'sortName': '',
-        'sortType': '',
-        'isHLtitle': 'true',
+    params = {
+        'rnd': '0.2540704981254671',
+        'type': '30',
+        'pageSize': '10',
+        'lastid': '-1',
+        'show': '1',
+        'page': '8',
     }
-    response = requests.post(
-        'http://www.cninfo.com.cn/new/hisAnnouncement/query',
-        headers=headers,
-        data=data,
-        verify=False,
-    )
+    response = requests.get('https://sns.sseinfo.com/ajax/feeds.do', params=params, headers=headers, verify=False)
     if response.status_code == 200:
         json_data = response.json()
         if json_data["announcements"]:
@@ -138,6 +126,12 @@ def get_cninfo_pdf_links() -> list:
 
 
 if __name__ == '__main__':
+    # 命名：公司简称-公告标题-公告时间
+    # 公司简称：//div[@class="m_feed_face"]/p/text()
+    # 公告文件url：//div[@class="m_feed_txt"]/a/@href
+    # 公告标题：//div[@class="m_feed_txt"]/a/text()
+    # 公告时间：//div[@class="m_feed_from"]/span/text()
+    query_feeds()
     folder = "./巨潮资讯网PDF"
     if not os.path.exists(folder):
         os.makedirs(folder)

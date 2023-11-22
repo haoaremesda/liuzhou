@@ -1,5 +1,6 @@
 import copy
 import os.path
+import shutil
 
 import chardet as chardet
 import requests
@@ -41,6 +42,11 @@ def make_dirs(path):
     else:
         # print(f"文件夹 '{path}' 已经存在.")
         pass
+
+
+def is_empty_folder(folder_path):
+    contents = os.listdir(folder_path)
+    return len(contents) == 0
 
 
 def remove_special_characters(strings):
@@ -243,13 +249,25 @@ def run():
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider, value) for value in drill_projects2]
         concurrent.futures.wait(futures)
+    # count_folders = {}
+    # for value in drill_projects2:
+    #     count_folders[value["projName"]] = value['drillHoleCount']
     items = os.listdir(folder)
     subfolders = [item for item in items if os.path.isdir(os.path.join(folder, item))]
     for subfolder in subfolders:
         subfolderx = f"{folder}/{subfolder}"
+        # if is_empty_folder(subfolderx):
+        #     os.rmdir(subfolderx)
+        #     continue
+        # elif len(os.listdir(subfolderx)) != count_folders[subfolder]:
+        #     shutil.rmtree(subfolderx)
+        #     continue
         # 遍历目录下的文件夹
         for folder_name in os.listdir(subfolderx):
             folder_pathx = os.path.join(subfolderx, folder_name)
+            # if is_empty_folder(folder_pathx):
+            #     os.rmdir(subfolderx)
+            #     break
             # 检查是否是文件夹
             if os.path.isdir(folder_pathx):
                 # 构建基本信息_1.txt文件的完整路径

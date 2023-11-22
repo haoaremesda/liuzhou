@@ -5,12 +5,11 @@ from io import BytesIO
 
 import pandas as pd
 import requests
-from lxml import etree
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook import Workbook
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from bs4 import BeautifulSoup
-from openpyxl import load_workbook
+from retrying import retry
 from openpyxl.drawing.image import Image
 import concurrent.futures
 
@@ -19,7 +18,21 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 heads = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"}
 
+heads2 = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "X-Requested-With": "XMLHttpRequest",
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
+
 proxies = {"http": "http://127.0.0.1:4780", "https": "http://127.0.0.1:4780"}
+# 白名单方式（需提前设置白名单）
+# 隧道域名:端口号
+tunnel = "o422.kdltps.com:15818"
+
+
+# proxies = {
+#     "http": "http://%(proxy)s/" % {"proxy": tunnel},
+#     "https": "http://%(proxy)s/" % {"proxy": tunnel}
+# }
 
 
 # 自定义比较函数，将百分比字符串转换为浮点数进行比较
@@ -27,6 +40,24 @@ def custom_sort(item):
     return float(item['value'].strip('%'))
 
 
+def init_session():
+    req_session = requests.session()
+    req_session.headers = heads2
+    return req_session
+
+
+req_session = init_session()
+
+
+def agecheckset():
+    url = "https://store.steampowered.com/agecheckset/app/2050650/"
+    data = {"sessionid": req_session.cookies.get("sessionid"), "ageDay": 1, "ageMonth": "January", "ageYear": "1990"}
+    resp = req_session.post(url=url, data=data, proxies=proxies)
+    if resp.status_code == 200:
+        print(resp)
+
+
+@retry(wait_fixed=1000)
 def get_steam_scout(app_id, language: str):
     url = f"https://www.togeproductions.com/SteamScout/a.php?appID={app_id}&language={language}&purchase_type=all"
     resp = requests.get(url=url, headers=heads, proxies=proxies)
@@ -35,13 +66,16 @@ def get_steam_scout(app_id, language: str):
         print(url)
         if json_data["query_summary"]:
             return json_data["query_summary"]
+    else:
+        print(resp.status_code, resp.text)
     return {}
 
 
+@retry(wait_fixed=2000)
 def get_steam_img(app_id) -> list:
     movie_img_list = []
     url = f"https://store.steampowered.com/app/{app_id}"
-    resp = requests.get(url=url, headers=heads, proxies=proxies)
+    resp = req_session.get(url=url, proxies=proxies)
     if resp.status_code == 200:
         soup = BeautifulSoup(resp.content, 'html.parser')
         soup = soup.select("div[id='highlight_strip_scroll']")
@@ -63,6 +97,38 @@ def get_steam_img(app_id) -> list:
                 break
     print(movie_img_list)
     return movie_img_list
+
+
+def get_portions(app_id):
+    global languages
+    all_data = {}
+    data = [str(app_id)]
+    portions = []
+    for key in keys:
+        while True:
+            d = get_steam_scout(app_id, key)
+            if d:
+                break
+        print(d)
+        if key == "all":
+            all_data = d
+            continue
+        if "total_reviews" not in d:
+            print(app_id, key)
+            continue
+        elif d["total_reviews"] == 0:
+            portion = "0.00%"
+        else:
+            portion = round(d["total_reviews"] / all_data["total_reviews"] * 100, 2)
+            portion = f"{portion}%"
+        portions.append({"name": key, "value": portion})
+    portions = sorted(portions, key=custom_sort, reverse=True)
+    for p in portions[:3]:
+        data.append(languages[p["name"]])
+        data.append(p["value"])
+    url_list = get_steam_img(app_id)
+    data.extend(url_list)
+    return data
 
 
 if __name__ == '__main__':
@@ -107,35 +173,37 @@ if __name__ == '__main__':
     # 获取某一列的数据
     column_data = df[column_name][1:].tolist()
     keys = list(languages.keys())
-    for app_id in column_data:
-        all_data = {}
-        data = [str(app_id)]
-        portions = []
-        for key in keys:
-            d = get_steam_scout(app_id, key)
-            if key == "all":
-                all_data = d
-                continue
-            if d["total_reviews"] == 0:
-                portion = "0.00%"
-            else:
-                portion = round(d["total_reviews"]/all_data["total_reviews"]*100, 2)
-                portion = f"{portion}%"
-            portions.append({"name": key, "value": portion})
-            time.sleep(0.5)
-        portions = sorted(portions, key=custom_sort, reverse=True)
-        for p in portions[:3]:
-            data.append(languages[p["name"]])
-            data.append(p["value"])
-        url_list = get_steam_img(app_id)
-        data.extend(url_list)
-        datas.append(data)
-        time.sleep(0.5)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        # 提交任务给线程池
+        futures = {executor.submit(get_portions, value): value for value in column_data}
+        # 等待所有线程执行完毕
+        for future in concurrent.futures.as_completed(futures):
+            option_value = futures[future]
+            try:
+                data = future.result()
+                datas.append(data)
+            except Exception as e:
+                print(f"线程发生异常: {e}")
     # 打印列数据
-    print(column_data)
+    # print(column_data)
     # 列名
-    # datas = [['简体中文', '8.26%', '保加利亚语', '0.03%', '阿拉伯语', '0.00%', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256970996/movie_max.mp4?t=1700397246', 'https://cdn.cloudflare.steamstatic.com/steam/apps/714010/ss_85f1fa0f47a568297ae65a37450bdbbe06ca88cf.600x338.jpg?t=1695340445', 'https://cdn.cloudflare.steamstatic.com/steam/apps/714010/ss_a456640ad0687e8e5fa13b0729f54efcf5ab994a.600x338.jpg?t=1695340445', 'https://cdn.cloudflare.steamstatic.com/steam/apps/714010/ss_90dc622d806092e52ffa966e027fccf463b846b3.600x338.jpg?t=1695340445'], ['简体中文', '9.52%', '保加利亚语', '0.06%', '阿拉伯语', '0.00%', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256932123/movie_max.mp4?t=1700397255', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256880856/movie_max.mp4?t=1700397255', 'https://cdn.cloudflare.steamstatic.com/steam/apps/1326470/ss_e6e3ab1badfb287a77fb6eef7b1589a35371496b.600x338.jpg?t=1697048131', 'https://cdn.cloudflare.steamstatic.com/steam/apps/1326470/ss_4fa5d260318f0aa37754b00c5dc10d1b7b9b9b1d.600x338.jpg?t=1697048131'], ['简体中文', '7.6%', '保加利亚语', '0.02%', '阿拉伯语', '0.00%', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256930504/movie_max.mp4?t=1700397263', 'https://cdn.cloudflare.steamstatic.com/steam/apps/990080/ss_725bf58485beb4aa37a3a69c1e2baa69bf3e4653.600x338.jpg?t=1699983982', 'https://cdn.cloudflare.steamstatic.com/steam/apps/990080/ss_df93b5e8a183f7232d68be94ae78920a90de1443.600x338.jpg?t=1699983982', 'https://cdn.cloudflare.steamstatic.com/steam/apps/990080/ss_94058497bf0f8fabdde17ee8d59bece609a60663.600x338.jpg?t=1699983982'], ['简体中文', '3.77%', '阿拉伯语', '0.00%', '保加利亚语', '0.0%', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256951968/movie_max.mp4?t=1700397272', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256951780/movie_max.mp4?t=1700397272', 'https://cdn.cloudflare.steamstatic.com/steam/apps/671860/ss_08558f0aa02d2c03c47971cfb39e4af207ac18ff.600x338.jpg?t=1686877598', 'https://cdn.cloudflare.steamstatic.com/steam/apps/671860/ss_b4175c430cc50636e44a9e6f07fa3a91bfe01548.600x338.jpg?t=1686877598'], ['简体中文', '96.36%', '阿拉伯语', '0.00%', '保加利亚语', '0.0%', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256947330/movie_max.mp4?t=1700397280', 'https://cdn.cloudflare.steamstatic.com/steam/apps/256849529/movie_max.mp4?t=1700397280', 'https://cdn.cloudflare.steamstatic.com/steam/apps/1468810/ss_7c70bc3bdba8adca87c229ed1a2ad15a36ec2573.600x338.jpg?t=1689733570', 'https://cdn.cloudflare.steamstatic.com/steam/apps/1468810/ss_200cb2792ed1a75d17dc2d3be788a8ccaff402e4.600x338.jpg?t=1689733570']]
-    # 创建一个 DataFrame
+    # 读取JSON文件
+    # file_path = './datas_new.json'
+    # with open(file_path, 'r', encoding="utf-8") as file:
+    #     # 使用json.load()方法加载JSON文件
+    #     datas = json.load(file)
+
+    xxx = False
+    for i in datas:
+        if len(i) == 7:
+            url_list = get_steam_img(i[0])
+            if not xxx:
+                agecheckset()
+                xxx = True
+                url_list = get_steam_img(i[0])
+            if not url_list:
+                print(i)
+            i.extend(url_list)
     # Excel 文件路径
     excel_file_path = '清单表 - 测试.xlsx'
     # 创建一个 Excel 工作簿
@@ -147,7 +215,7 @@ if __name__ == '__main__':
             # 如果是图片链接，则下载图片并插入单元格
             if '.jpg' in link or '.png' in link:
                 # 处理图片
-                response = requests.get(link)
+                response = requests.get(link, heads)
                 if response.status_code == 200:
                     # 将图片字节数据保存到 BytesIO 对象
                     img = Image(BytesIO(response.content))

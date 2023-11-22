@@ -187,8 +187,6 @@ def spider_coord(coord: dict, path: str) -> list:
         for info in mode_data:
             if mode == "BaseData":
                 info_file_path = f"{coord_path}/基本信息_{num}.txt"
-                # if os.path.exists(info_file_path):
-                #     continue
                 coord_info = save_info(info, info_file_path)
                 if coord_info:
                     spider_data = coord_info
@@ -211,13 +209,13 @@ def spider(dril_obj: dict):
     global folder
     # dril_obj['projName'] = remove_special_characters(dril_obj['projName']).replace("\r", "").replace("\n", "").strip()
     path = f"{folder}/{dril_obj['projName']}"
-    # if os.path.exists(path):
-    #     return
+    if os.path.exists(path):
+        return
     print(dril_obj['projName'], "---正在开始")
     make_dirs(path)
     coords_list = get_dr_coords_json(dril_obj["keyid"])
     projects_num[dril_obj['projName']] = len(coords_list)
-    max_threads = 10
+    max_threads = 5
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         futures = [executor.submit(spider_coord, value, path) for value in coords_list]
         concurrent.futures.wait(futures)

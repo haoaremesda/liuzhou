@@ -72,20 +72,19 @@ def query_feeds(page: int, page_size: int) -> tuple:
             come_to_an_end = True
         else:
             tree = etree.HTML(response.text)
-            company_names = tree.xpath('//div[@class="m_feed_face"]/p/text()')
-            file_urls = tree.xpath('//div[@class="m_feed_txt"]/a/@href')
-            file_names = tree.xpath('//div[@class="m_feed_txt"]/a/text()')
-            released_time = tree.xpath('//div[@class="m_feed_from"]/span/text()')
-            released_time = [convert_to_datetime(item) for item in released_time]
-            if company_names and file_urls and file_names and released_time:
-                for i in range(len(company_names)):
-                    if not file_urls[i]:
-                        continue
+            feed_details = tree.xpath('//div[@class="m_feed_detail"]')
+            for feed_div in feed_details:
+                company_names = feed_div.xpath('.//div[@class="m_feed_face"]/p/text()')
+                file_urls = feed_div.xpath('.//div[@class="m_feed_txt"]/a/@href')
+                file_names = feed_div.xpath('.//div[@class="m_feed_txt"]/a/text()')
+                released_time = feed_div.xpath('.//div[@class="m_feed_from"]/span/text()')
+                if company_names and file_urls and file_names and released_time:
+                    released_time = [convert_to_datetime(item) for item in released_time]
                     # 命名：公司简称-公告标题-公告时间
-                    d = file_names[i].split(".")
-                    d.insert(0, company_names[i])
-                    d.insert(-1, released_time[i])
-                    ks.append({"file_name": "_".join(d[:-1]), "url": file_urls[i]})
+                    d = file_names[0].split(".")
+                    d.insert(0, company_names[0])
+                    d.insert(-1, released_time[0])
+                    ks.append({"file_name": remove_special_characters("_".join(d[:-1])), "url": file_urls[0]})
     else:
         print(response.status_code, response.text)
     num = len(ks)
@@ -115,9 +114,9 @@ def get_sseinfo_pdf_links():
         if come_to_an_end:
             break
         max_threads = 3
-        with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-            futures = [executor.submit(save_pdf, value) for value in data]
-            concurrent.futures.wait(futures)
+        # with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
+        #     futures = [executor.submit(save_pdf, value) for value in data]
+        #     concurrent.futures.wait(futures)
         time.sleep(2)
         page += 1
         all_pdf_num += max_num

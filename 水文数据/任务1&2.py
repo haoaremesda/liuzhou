@@ -71,6 +71,7 @@ if __name__ == '__main__':
     fields = ["水位", "出库流量", "入库流量", "蓄水池"]
     ynswj_names = ['黄登', '大华桥', '苗尾', '功果桥', '小湾', '乌东德水库', '糯扎渡', '景洪', '溪洛渡水库', '向家坝水库']
     ynswj_data = {i: {s: "-" for s in ynswj_names} for i in fields}
+    run()
     # 创建调度器
     scheduler = BlockingScheduler()
     # 添加定时任务，每天下午两点执行一次

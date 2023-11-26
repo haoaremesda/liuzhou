@@ -28,6 +28,8 @@ def remove_special_characters(strings):
 
 @retry(wait_fixed=5000)
 def query_announcements(page, pageSize, seDate) -> tuple:
+    global names
+    totalpages = 0
     num = 0
     ks = []
     data = {
@@ -54,8 +56,12 @@ def query_announcements(page, pageSize, seDate) -> tuple:
     )
     if response.status_code == 200:
         json_data = response.json()
+        totalpages = json_data["totalpages"]
+        num = json_data["totalRecordNum"]
+        if totalpages * pageSize < num:
+            totalpages += 1
         if json_data["announcements"]:
-            print(response.status_code, page, pageSize, seDate, response.text)
+            # print(response.status_code, page, pageSize, seDate, response.text)
             for item in json_data["announcements"]:
                 d = []
                 for k in ["secCode", "secName", "announcementTitle"]:
@@ -64,26 +70,37 @@ def query_announcements(page, pageSize, seDate) -> tuple:
                 # Format the datetime object as a string
                 formatted_time = datetime_object.strftime('%Y-%m-%d %H：%M：%S')
                 d.append(formatted_time)
+                d.append(str(item["announcementId"]))
+                file_name = "_".join(d)
+                # if file_name in names:
+                #     d.append(str(int(time.time()*1e3)))
+                #     file_name = "_".join(d)
                 try:
-                    ks.append({"file_name": "_".join(d), "url": f"http://static.cninfo.com.cn/{item['adjunctUrl']}"})
+                    ks.append({"file_name": file_name, "url": f"http://static.cninfo.com.cn/{item['adjunctUrl']}"})
+                    names.append(file_name)
                 except:
                     print(item)
-            num = json_data["totalAnnouncement"]
+        else:
+            print(json_data)
     else:
         print(response.status_code, response.text)
-    return num, ks
+    print(page, pageSize, seDate, len(ks))
+    return response.status_code, totalpages, ks, num
 
 
-@retry(wait_fixed=5000)
-def save_pdf(pdf_ks: dict):
-    global folder
-    file_path = f'{folder}/{pdf_ks["file_name"]}.{pdf_ks["url"].split(".")[-1]}'
+@retry(wait_fixed=3000)
+def save_pdf(pdf_ks: dict, p: str):
+    global folder, fail_list
+    file_path = f'{p}/{pdf_ks["file_name"]}.{pdf_ks["url"].split(".")[-1]}'
     if not os.path.exists(file_path):
         resp = requests.get(url=pdf_ks["url"], stream=True)
         if resp.status_code == 200:
             with open(f'{file_path}', 'wb') as fd:
                 for chunk in resp.iter_content(5120):
                     fd.write(chunk)
+        else:
+            print(resp.status_code)
+            fail_list[file_path] = pdf_ks["url"]
 
 
 def get_cninfo_pdf_links() -> list:
@@ -92,7 +109,7 @@ def get_cninfo_pdf_links() -> list:
     # 定义起始日期和结束日期
     start_date = datetime(2012, 7, 1)
     end_date = datetime(2023, 10, 31)
-    # 初始化一个空列表来存储日期字符串
+    # 初始化一个空列表来存储日期字符串·
     date_strings = []
     # 生成在指定范围内的每个半个月的日期字符串范围
     current_date = start_date
@@ -110,26 +127,33 @@ def get_cninfo_pdf_links() -> list:
     pdf_num_dict = {}
     for index, i in enumerate(date_strings):
         page = 1
+        max_totalpages = 0
         max_num = 0
+        pdf_num_dict[i] = {}
         while True:
             print(index, page, PageSize, i)
-            max_num, data = query_announcements(page, PageSize, i)
-            # for x in data:
-            #     save_pdf(x)
-            #     time.sleep(0.5)
+            status_code, max_totalpages, data, max_num = query_announcements(page, PageSize, i)
+            if status_code != 200:
+                continue
+            p = f"{folder}/{i}/{page}"
+            if not os.path.exists(p):
+                os.makedirs(p)
+            # x = []
+            # for k in data:
+            #     file_path = f'{k["file_name"]}.{k["url"].split(".")[-1]}'
+            #     x.append(file_path)
             max_threads = 5
             with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-                futures = [executor.submit(save_pdf, value) for value in data]
+                futures = [executor.submit(save_pdf, value, p) for value in data]
                 concurrent.futures.wait(futures)
-            if not max_num:
+            if not max_totalpages:
                 break
-            # likes.extend(data)
-            if max_num < page * PageSize:
-                all_pdf_num += max_num
-                pdf_num_dict[i] = max_num
+            pdf_num_dict[i][page] = len(data)
+            if page >= max_totalpages:
                 break
             time.sleep(0.5)
             page += 1
+        all_pdf_num += max_num
     print("所有数量：", all_pdf_num)
     print("数量分布：", pdf_num_dict)
     print(likes)
@@ -138,6 +162,8 @@ def get_cninfo_pdf_links() -> list:
 
 
 if __name__ == '__main__':
+    names = []
+    fail_list = {}
     folder = "./巨潮资讯网PDF"
     if not os.path.exists(folder):
         os.makedirs(folder)

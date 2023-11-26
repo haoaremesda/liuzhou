@@ -6,7 +6,6 @@ import time
 import requests
 from datetime import datetime, timedelta
 from requests_toolbelt.multipart.encoder import MultipartEncoder
-from apscheduler.schedulers.blocking import BlockingScheduler
 import concurrent.futures
 import pandas as pd
 
@@ -102,7 +101,7 @@ def run():
     global sczwfw_datas_file_path, sczwfw_summary_file_path
     station_datas = []
     current_date = datetime.now()
-    sczwfw_names = ['雅江（三）', '桐子林（二）', '二滩', '锦屏', '官地']
+    sczwfw_names = ['雅江（三）', '桐子林（二）', '二滩', '锦屏一级', '官地']
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(sczwfw_names)) as executor:  # 最大线程数为4
         # 提交任务给线程池
         futures = {executor.submit(get_sczwfw_data, value): value for value in sczwfw_names}

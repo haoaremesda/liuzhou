@@ -163,7 +163,7 @@ def get_cninfo_pdf_links() -> list:
 
 if __name__ == '__main__':
     names = []
-    fail_list = {}
+    fail_list = {'./巨潮资讯网PDF/2023-05-13~2023-05-28/37/002205_国统股份_002205国统股份报备文件上传20230516_2023-05-16 11：27：23_1216831417.PDF': 'http://static.cninfo.com.cn/finalpage/2023-05-16/1216831417.PDF'}
     folder = "./巨潮资讯网PDF"
     if not os.path.exists(folder):
         os.makedirs(folder)

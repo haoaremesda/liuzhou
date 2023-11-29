@@ -9,6 +9,7 @@ from lxml import etree
 from datetime import datetime, timedelta
 from retrying import retry
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from hashlib import md5
 
 # 禁用安全请求警告
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -23,7 +24,14 @@ headers = {
     'X-Requested-With': 'XMLHttpRequest',
 }
 
-proxies = {"http": "http://127.0.0.1:4780", "https": "http://127.0.0.1:4780"}
+# proxies = {"http": "http://127.0.0.1:4780", "https": "http://127.0.0.1:4780"}
+
+tunnel = "f693.kdltps.com:15818"
+
+proxies = {
+    "http": "http://%(proxy)s/" % {"proxy": tunnel},
+    "https": "http://%(proxy)s/" % {"proxy": tunnel}
+}
 
 
 def remove_special_characters(strings):
@@ -53,7 +61,7 @@ def convert_to_datetime(original_str):
     return timestamp.strftime('%Y-%m-%d %H：%M：%S')
 
 
-@retry(wait_fixed=5000)
+@retry(wait_fixed=3000)
 def query_feeds(page: int, page_size: int) -> tuple:
     num = 0
     ks = []
@@ -67,7 +75,8 @@ def query_feeds(page: int, page_size: int) -> tuple:
         'page': page,
     }
     response = requests.get('https://sns.sseinfo.com/ajax/feeds.do', params=params, headers=headers, proxies=proxies, verify=False)
-    if response.status_code == 200:
+    status_code = response.status_code
+    if status_code == 200:
         if "暂时没有上市公司发布" in response.text:
             come_to_an_end = True
         else:
@@ -84,16 +93,17 @@ def query_feeds(page: int, page_size: int) -> tuple:
                     d = file_names[0].split(".")
                     d.insert(0, company_names[0])
                     d.insert(-1, released_time[0])
+                    d.insert(-1, md5(file_urls[0].encode()).hexdigest())
                     ks.append({"file_name": remove_special_characters("_".join(d[:-1])), "url": file_urls[0]})
     else:
         print(response.status_code, response.text)
     num = len(ks)
-    return num, ks, come_to_an_end
+    return status_code, num, ks, come_to_an_end
 
 
-@retry(wait_fixed=5000)
+@retry(wait_fixed=3000)
 def save_pdf(pdf_ks: dict):
-    global folder
+    global folder, fail_list
     file_path = f'{folder}/{pdf_ks["file_name"]}.{pdf_ks["url"].split(".")[-1]}'
     if not os.path.exists(file_path):
         resp = requests.get(url=pdf_ks["url"], proxies=proxies, stream=True)
@@ -101,23 +111,30 @@ def save_pdf(pdf_ks: dict):
             with open(f'{file_path}', 'wb') as fd:
                 for chunk in resp.iter_content(5120):
                     fd.write(chunk)
-        print("爬取完成：", file_path)
+            print("爬取完成：", file_path)
+        else:
+            print(resp.status_code)
+            fail_list[file_path] = pdf_ks["url"]
 
 
 def get_sseinfo_pdf_links():
-    page = 1
+    page = 2242
     all_pdf_num = 0
     pdf_num_dict = {}
     while True:
-        max_num, data, come_to_an_end = query_feeds(page, 10)
+        status_code, max_num, data, come_to_an_end = query_feeds(page, 10)
+        if status_code != 200:
+            continue
         print(max_num, come_to_an_end)
-        if come_to_an_end:
+        # if come_to_an_end:
+        #     break
+        max_threads = 5
+        with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
+            futures = [executor.submit(save_pdf, value) for value in data]
+            concurrent.futures.wait(futures)
+        # time.sleep(2)
+        if page >= 2466:
             break
-        max_threads = 3
-        # with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-        #     futures = [executor.submit(save_pdf, value) for value in data]
-        #     concurrent.futures.wait(futures)
-        time.sleep(2)
         page += 1
         all_pdf_num += max_num
         pdf_num_dict[page] = max_num
@@ -126,6 +143,7 @@ def get_sseinfo_pdf_links():
 
 
 if __name__ == '__main__':
+    fail_list = {}
     # 最大页数2452
     folder = "./上证e互动PDF"
     if not os.path.exists(folder):

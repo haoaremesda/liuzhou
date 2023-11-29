@@ -5,6 +5,7 @@ import requests
 from datetime import datetime, timedelta
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 from apscheduler.schedulers.blocking import BlockingScheduler
+from retrying import retry
 import pandas as pd
 
 req_session = requests.session()
@@ -12,8 +13,9 @@ req_session.headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"}
 
 
-def get_ynswj_data():
-    global ynswj_data, ynswj_names
+@retry(wait_fixed=5000)
+def get_ynswj_data(sttp: str = "RR"):
+    global ynswj_data, ynswj_names, ZQ_ZZ_names
     # 获取今天的日期
     today = datetime.now().date()
     # 获取昨天的日期
@@ -21,18 +23,24 @@ def get_ynswj_data():
     # 将日期转换为字符串
     today_str = today.strftime('%Y-%m-%d')
     yesterday_str = yesterday.strftime('%Y-%m-%d')
-    url = f"http://www.ynswj.cn/webapi/api/v1/water?itm=1&no_data_visible=true&time=[{yesterday_str}%2008:00:00,{today_str}%208:00:00]&sttp=RR&station_type=4,5"
+    current_hour = datetime.now().strftime('%H')
+    _ = int(time.time()*1e3)
+    if sttp == "ZQ,ZZ":
+        url = f"http://www.ynswj.cn/webapi/api/v1/water?itm=1&no_data_visible=true&time=[{yesterday_str}T{current_hour}:00:00,{today_str}T{current_hour}:00:00]&sttp={sttp}&_={_}"
+    else:
+        url = f"http://www.ynswj.cn/webapi/api/v1/water?itm=1&no_data_visible=true&time=[{yesterday_str}%20{current_hour}:00:00,{today_str}%2{current_hour}:00:00]&sttp={sttp}&station_type=4,5"
     res = req_session.get(url=url)
     if res.status_code == 200:
         if res.json()["data"]:
             for i in res.json()["data"]:
                 if i["name"] in ynswj_names:
-                    ynswj_data["水位"][i["name"]] = str(i["val"]) if i["val"] else "-"
-                    ynswj_data["出库流量"][i["name"]] = str(i["out_val"]) if i["out_val"] else "-"
-                    ynswj_data["入库流量"][i["name"]] = str(i["in_val"]) if i["in_val"] else "-"
-                    ynswj_data["蓄水池"][i["name"]] = str(i["capacity"]) if i["capacity"] else "-"
+                    ynswj_data["水位"][i["name"]] = str(i["val"]) if "val" in i else "-"
+                    ynswj_data["出库流量"][i["name"]] = str(i["out_val"]) if "out_val" in i else "-"
+                    ynswj_data["入库流量"][i["name"]] = str(i["in_val"]) if "in_val" in i else "-"
+                    ynswj_data["蓄水池"][i["name"]] = str(i["capacity"]) if "capacity" in i else "-"
 
 
+@retry(wait_fixed=5000)
 def get_schwr_data():
     global ynswj_data, ynswj_names
     t = int(time.time() * 1e3)
@@ -51,6 +59,7 @@ def get_schwr_data():
 
 def run():
     get_ynswj_data()
+    get_ynswj_data("ZQ,ZZ")
     get_schwr_data()
     for c in ynswj_data.items():
         columns = ["时间"] + list(c[1].keys())
@@ -58,9 +67,9 @@ def run():
         df = pd.DataFrame(values, columns=columns)
         path = f'{sczwfw_summary_file_path}/任务1&2 {c[0]}.csv'
         if os.path.exists(path):
-            df.to_csv(path, mode='a', header=False, index=False)
+            df.to_csv(path, mode='a', header=False, index=False, encoding="utf-8-sig")
         else:
-            df.to_csv(path, index=False)
+            df.to_csv(path, index=False, encoding="utf-8-sig")
     print("任务1&2执行完成")
 
 
@@ -70,6 +79,8 @@ if __name__ == '__main__':
         os.makedirs(sczwfw_summary_file_path)
     fields = ["水位", "出库流量", "入库流量", "蓄水池"]
     ynswj_names = ['黄登', '大华桥', '苗尾', '功果桥', '小湾', '乌东德水库', '糯扎渡', '景洪', '溪洛渡水库', '向家坝水库']
+    ZQ_ZZ_names = ['功果桥', '戛旧', '允景洪', '溜筒江', '白济汛', '大朝山']
+    ynswj_names.extend(ZQ_ZZ_names)
     ynswj_data = {i: {s: "-" for s in ynswj_names} for i in fields}
     run()
     # 创建调度器

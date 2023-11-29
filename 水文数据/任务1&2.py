@@ -28,7 +28,7 @@ def get_ynswj_data(sttp: str = "RR"):
     if sttp == "ZQ,ZZ":
         url = f"http://www.ynswj.cn/webapi/api/v1/water?itm=1&no_data_visible=true&time=[{yesterday_str}T{current_hour}:00:00,{today_str}T{current_hour}:00:00]&sttp={sttp}&_={_}"
     else:
-        url = f"http://www.ynswj.cn/webapi/api/v1/water?itm=1&no_data_visible=true&time=[{yesterday_str}%20{current_hour}:00:00,{today_str}%2{current_hour}:00:00]&sttp={sttp}&station_type=4,5"
+        url = f"http://www.ynswj.cn/webapi/api/v1/water?itm=1&no_data_visible=true&time=[{yesterday_str} 08:00:00,{today_str} 8:00:00]&sttp={sttp}&station_type=4,5"
     res = req_session.get(url=url)
     if res.status_code == 200:
         if res.json()["data"]:

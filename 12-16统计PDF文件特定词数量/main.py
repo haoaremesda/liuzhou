@@ -16,23 +16,20 @@ def parse_keywords(keywords: str) -> list:
 def parse_infos(infos_str: str):
     infos_list = []
     # 定义正则表达式模式
-    pattern = r"公司代码：(\d+)[\s\S]*?公司简称：([^\n]+)[\s\S]*?(\d{4}) 年年度报告"
-    # 使用正则表达式匹配文本
-    match = re.search(pattern, infos_str)
-    if match:
-        # 提取匹配到的信息
-        company_code = match.group(1)
-        company_name = match.group(2)
-        year = match.group(3)
-        infos_list.append(company_code)
-        infos_list.append(company_name)
-        infos_list.append(year)
-        # 打印提取到的信息
-        print("公司代码:", company_code)
-        print("公司简称:", company_name)
-        print("年度:", year)
-    else:
-        print("未找到匹配的信息")
+    regular = [r"代码：(\d+).*", r"股票代码\s+(\d+).*", r"股票代码：(\d+).*",
+               r"A 股股票代码：(\d+).*", r"股票代码：\n(\d+).*"]
+    for i in regular:
+        match = re.search(i, infos_str)
+        if match:
+            # 提取匹配到的信息
+            company_code = match.group(1)
+            if len(company_code) != 6:
+                print(company_code)
+            infos_list.append(company_code)
+            print("公司代码:", company_code)
+            break
+    if not infos_list:
+        print("xxxxxxx")
     return infos_list
 
 
@@ -46,14 +43,23 @@ def count_specific_words(pdf_path, specific_words):
 
     infos_list = []
 
+    match = re.search(r"\\([^\\]+?)(\d{4}).*", pdf_path)
+    if not match:
+        print("sssssssss")
+
     # 遍历每一页
     for page_number in range(pdf_document.page_count):
         page = pdf_document[page_number]
 
         # 提取文本
         page_text = page.get_text()
-        if page_number == 0:
-            infos_list = parse_infos(page_text)
+        if "股票代码" in page_text or "公司代码" in page_text or "股票简称" in page_text or "公司简称" in page_text:
+            if not infos_list:
+                infos_list = parse_infos(page_text)
+                if match:
+                    infos_list.append(match.group(1).split("：")[0])
+                    infos_list.append(match.group(2))
+
 
         # 遍历特定词
         for word in specific_words:
@@ -76,7 +82,7 @@ def process_pdf(pdf_path, specific_words):
 
 
 # 目录路径
-pdf_directory_path = '年报'
+pdf_directory_path = r'F:\压缩文件\年报'
 
 # 要统计的特定词列表
 specific_words_str = """红色文创、红船精神、浙江精神、红色影视、中国故事、不忘初心、牢记使命、红色文化、民族精神、文化强国、民旅振兴、马克思主文、习近平新时代中国特色社会主文恩想、中国梦、三个代表面要思想、可持续发展、高质量发展．毛译东思想、邓小平理论、马克恩列宁主义、中华民族伟大复兴、政治意识、大局意识、核心意识，看齐意识。生态保护、节能减排、可持续发展、绿色发展观、环境友好、低碳。实事求是、公平公正、开放自由、格守承诺、解放思想、开拓进取。正版化、合法化、尊重创作、版权保护、打击盗版、合规经营、反舞弊、法治。团结协作、共享、交流、互助、爱心、友善、平台连接、文化艺术交流、互利共赢、战略合作、协同发展、公益活动、捐赠、助学、乡村振兴、扶贫助农、人才培养、开展培训、以人为本、以客户为中心、员工关怀、勤学、修德、明辨、笃实"""

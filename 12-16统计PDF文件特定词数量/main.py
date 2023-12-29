@@ -17,13 +17,13 @@ def parse_infos(infos_str: str):
     infos_list = []
     # 定义正则表达式模式
     regular = [r"代码：(\d+).*", r"股票代码\s+(\d+).*", r"股票代码：(\d+).*",
-               r"A 股股票代码：(\d+).*", r"股票代码：\n(\d+).*"]
+               r"A 股股票代码：(\d+).*", r"股票代码：\n(\d+).*", r"证券代码\s+(\d+).*"]
     for i in regular:
         match = re.search(i, infos_str)
         if match:
             # 提取匹配到的信息
             company_code = match.group(1)
-            if len(company_code) != 6:
+            if len(company_code) < 6:
                 print(company_code)
             infos_list.append(company_code)
             print("公司代码:", company_code)
@@ -53,7 +53,7 @@ def count_specific_words(pdf_path, specific_words):
 
         # 提取文本
         page_text = page.get_text()
-        if "股票代码" in page_text or "公司代码" in page_text or "股票简称" in page_text or "公司简称" in page_text:
+        if "股票代码" in page_text or "公司代码" in page_text or "证券代码" in page_text:
             if not infos_list:
                 infos_list = parse_infos(page_text)
                 if match:
@@ -111,6 +111,8 @@ for pdf_file, infos_list, word_count in results:
     print(f"infos_list: {infos_list}")
     print("Word Count:", word_count)
     print("-" * 30)
+    if len(infos_list) < 3:
+        print("dsadsadsadsadsa")
     infos_list.append(sum(word_count.values()))
     datas.append(infos_list)
 
